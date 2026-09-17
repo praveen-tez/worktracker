@@ -1,0 +1,9 @@
+{
+  "pid": 15104,
+  "startedAt": 1789478429813,
+  "command": "dev",
+  "cwd": "C:/Users/user/Downloads/Projects/Test Mine/Tracker - logs",
+  "port": 3000,
+  "hostname": "::1",
+  "url": "http://[::1]:3000"
+}
