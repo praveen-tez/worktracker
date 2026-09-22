@@ -1,48 +1,49 @@
 import process from 'node:process';globalThis._importMeta_={url:import.meta.url,env:process.env};import { tmpdir } from 'node:os';
+import { defineEventHandler, handleCacheHeaders, splitCookiesString, createEvent, fetchWithEvent, isEvent, eventHandler, setHeaders, createError, sendRedirect, proxyRequest, getRequestHeader, setResponseHeaders, setResponseStatus, send, getRequestHeaders, setResponseHeader, appendResponseHeader, getRequestURL, getResponseHeader, removeResponseHeader, getQuery as getQuery$1, getRequestWebStream, createApp, createRouter as createRouter$1, toNodeListener, lazyEventHandler, getResponseStatus, getRouterParam, readBody, getResponseStatusText } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/h3/dist/index.mjs';
 import { Server } from 'node:http';
 import { resolve, dirname, join } from 'node:path';
 import nodeCrypto from 'node:crypto';
 import { parentPort, threadId } from 'node:worker_threads';
-import { defineEventHandler, handleCacheHeaders, splitCookiesString, createEvent, fetchWithEvent, isEvent, eventHandler, setHeaders, createError, sendRedirect, proxyRequest, getRequestHeader, setResponseHeaders, setResponseStatus, send, getRequestHeaders, setResponseHeader, appendResponseHeader, getRequestURL, getResponseHeader, removeResponseHeader, getQuery as getQuery$1, getRequestWebStream, createApp, createRouter as createRouter$1, toNodeListener, lazyEventHandler, getResponseStatus, getRouterParam, readBody, getResponseStatusText } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/h3/dist/index.mjs';
-import { escapeHtml } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/@vue/shared/dist/shared.cjs.js';
-import viteNodeEntry_mjs from 'file:///C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/@nuxt/vite-builder/dist/vite-node-entry.mjs';
-import { viteNodeFetch } from 'file:///C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/@nuxt/vite-builder/dist/vite-node.mjs';
-import { parseURL, withoutBase, joinURL, getQuery, withQuery, withTrailingSlash, decodePath, withLeadingSlash, withoutTrailingSlash, encodePath, joinRelativeURL } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/ufo/dist/index.mjs';
-import { createHead as createHead$1, propsToString, renderSSRHead } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/unhead/dist/server.mjs';
-import { isVNode, isRef, toValue } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/vue/index.mjs';
-import { DeprecationsPlugin } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/unhead/dist/legacy.mjs';
-import { PromisesPlugin, TemplateParamsPlugin, AliasSortingPlugin } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/unhead/dist/plugins.mjs';
-import { klona } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/klona/dist/index.mjs';
-import defu, { defuFn } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/defu/dist/defu.mjs';
-import destr, { destr as destr$1 } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/destr/dist/index.mjs';
-import { snakeCase } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/scule/dist/index.mjs';
-import { defineDiagnostics, createConsoleReporter } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/nostics/dist/index.mjs';
-import { ansiFormatter } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/nostics/dist/formatters/ansi.mjs';
-import { createRenderer, getRequestDependencies, getPreloadLinks, getPrefetchLinks } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/vue-bundle-renderer/dist/runtime.mjs';
-import { renderToString } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/vue/server-renderer/index.mjs';
-import { stringify, uneval } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/devalue/index.js';
-import { createHooks } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/hookable/dist/index.mjs';
-import { createFetch, Headers as Headers$1 } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/ofetch/dist/node.mjs';
-import { fetchNodeRequestHandler, callNodeRequestHandler } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/node-mock-http/dist/index.mjs';
-import { createStorage, prefixStorage } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/unstorage/dist/index.mjs';
-import unstorage_47drivers_47fs from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/unstorage/drivers/fs.mjs';
-import { digest, hash as hash$1 } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/ohash/dist/index.mjs';
-import { toRouteMatcher, createRouter } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/radix3/dist/index.mjs';
+import { escapeHtml } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/@vue/shared/dist/shared.cjs.js';
+import viteNodeEntry_mjs from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/@nuxt/vite-builder/dist/vite-node-entry.mjs';
+import { viteNodeFetch } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/@nuxt/vite-builder/dist/vite-node.mjs';
+import { parseURL, withoutBase, joinURL, getQuery, withQuery, withTrailingSlash, decodePath, withLeadingSlash, withoutTrailingSlash, encodePath, joinRelativeURL } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/ufo/dist/index.mjs';
+import destr, { destr as destr$1 } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/destr/dist/index.mjs';
+import { createHooks } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/hookable/dist/index.mjs';
+import { createFetch, Headers as Headers$1 } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/ofetch/dist/node.mjs';
+import { fetchNodeRequestHandler, callNodeRequestHandler } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/node-mock-http/dist/index.mjs';
+import { createStorage, prefixStorage } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/unstorage/dist/index.mjs';
+import unstorage_47drivers_47fs from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/unstorage/drivers/fs.mjs';
+import { digest, hash as hash$1 } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/ohash/dist/index.mjs';
+import { klona } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/klona/dist/index.mjs';
+import defu, { defuFn } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/defu/dist/defu.mjs';
+import { snakeCase } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/scule/dist/index.mjs';
+import { getContext } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/unctx/dist/index.mjs';
+import { toRouteMatcher, createRouter } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/radix3/dist/index.mjs';
 import { readFile } from 'node:fs/promises';
-import consola, { consola as consola$1 } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/consola/dist/index.mjs';
-import { ErrorParser } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/youch-core/build/index.js';
-import { Youch } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/youch/build/index.js';
-import { SourceMapConsumer } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/source-map/source-map.js';
+import consola, { consola as consola$1 } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/consola/dist/index.mjs';
+import { ErrorParser } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/youch-core/build/index.js';
+import { Youch } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/youch/build/index.js';
+import { SourceMapConsumer } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/source-map/source-map.js';
+import { defineDiagnostics, createConsoleReporter } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/nostics/dist/index.mjs';
+import { ansiFormatter } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/nostics/dist/formatters/ansi.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { getContext } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/@nuxt/nitro-server/node_modules/unctx/dist/index.mjs';
-import { captureRawStackTrace, parseRawStackTrace } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/errx/dist/index.mjs';
-import _wH6JrtIxmaSoA8lCPWFnE9z4lQeXW6H5z3l5aymEQw from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/@nuxt/vite-builder/dist/fix-stacktrace.mjs';
+import { stringify, uneval } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/devalue/index.js';
+import { getContext as getContext$1 } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/@nuxt/nitro-server/node_modules/unctx/dist/index.mjs';
+import { captureRawStackTrace, parseRawStackTrace } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/errx/dist/index.mjs';
+import { isVNode, isRef, toValue } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/vue/index.mjs';
+import _wH6JrtIxmaSoA8lCPWFnE9z4lQeXW6H5z3l5aymEQw from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/@nuxt/vite-builder/dist/fix-stacktrace.mjs';
 import { promises } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname as dirname$1, resolve as resolve$1 } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/pathe/dist/index.mjs';
-import { walkResolver } from 'file://C:/Users/user/Downloads/Projects/Test%20Mine/Tracker%20-%20logs/node_modules/unhead/dist/utils.mjs';
+import { dirname as dirname$1, resolve as resolve$1 } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/pathe/dist/index.mjs';
+import { createRenderer, getRequestDependencies, getPreloadLinks, getPrefetchLinks } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/vue-bundle-renderer/dist/runtime.mjs';
+import { renderToString } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/vue/server-renderer/index.mjs';
+import { createHead as createHead$1, propsToString, renderSSRHead } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/unhead/dist/server.mjs';
+import { walkResolver } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/unhead/dist/utils.mjs';
+import { DeprecationsPlugin } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/unhead/dist/legacy.mjs';
+import { PromisesPlugin, TemplateParamsPlugin, AliasSortingPlugin } from 'file:///Users/mister_tej/Projects/products/worktracker/node_modules/unhead/dist/plugins.mjs';
 
-const serverAssets = [{"baseName":"server","dir":"C:/Users/user/Downloads/Projects/Test Mine/Tracker - logs/server/assets"}];
+const serverAssets = [{"baseName":"server","dir":"/Users/mister_tej/Projects/products/worktracker/server/assets"}];
 
 const assets$1 = createStorage();
 
@@ -54,11 +55,11 @@ const storage = createStorage({});
 
 storage.mount('/assets', assets$1);
 
-storage.mount('root', unstorage_47drivers_47fs({"driver":"fs","readOnly":true,"base":"C:/Users/user/Downloads/Projects/Test Mine/Tracker - logs","watchOptions":{"ignored":[null]}}));
-storage.mount('src', unstorage_47drivers_47fs({"driver":"fs","readOnly":true,"base":"C:/Users/user/Downloads/Projects/Test Mine/Tracker - logs/server","watchOptions":{"ignored":[null]}}));
-storage.mount('build', unstorage_47drivers_47fs({"driver":"fs","readOnly":false,"base":"C:/Users/user/Downloads/Projects/Test Mine/Tracker - logs/.nuxt"}));
-storage.mount('cache', unstorage_47drivers_47fs({"driver":"fs","readOnly":false,"base":"C:/Users/user/Downloads/Projects/Test Mine/Tracker - logs/.nuxt/cache"}));
-storage.mount('data', unstorage_47drivers_47fs({"driver":"fs","base":"C:/Users/user/Downloads/Projects/Test Mine/Tracker - logs/.data/kv"}));
+storage.mount('root', unstorage_47drivers_47fs({"driver":"fs","readOnly":true,"base":"/Users/mister_tej/Projects/products/worktracker","watchOptions":{"ignored":[null]}}));
+storage.mount('src', unstorage_47drivers_47fs({"driver":"fs","readOnly":true,"base":"/Users/mister_tej/Projects/products/worktracker/server","watchOptions":{"ignored":[null]}}));
+storage.mount('build', unstorage_47drivers_47fs({"driver":"fs","readOnly":false,"base":"/Users/mister_tej/Projects/products/worktracker/.nuxt"}));
+storage.mount('cache', unstorage_47drivers_47fs({"driver":"fs","readOnly":false,"base":"/Users/mister_tej/Projects/products/worktracker/.nuxt/cache"}));
+storage.mount('data', unstorage_47drivers_47fs({"driver":"fs","base":"/Users/mister_tej/Projects/products/worktracker/.data/kv"}));
 
 function useStorage(base = "") {
   return base ? prefixStorage(storage, base) : storage;
@@ -697,6 +698,11 @@ new Proxy(/* @__PURE__ */ Object.create(null), {
     }
     return void 0;
   }
+});
+
+getContext("nitro-app", {
+  asyncContext: false,
+  AsyncLocalStorage: void 0
 });
 
 function isPathInScope(pathname, base) {
@@ -2024,7 +2030,7 @@ if (!window.__NUXT_DEVTOOLS_TIME_METRIC__) {
 window.__NUXT_DEVTOOLS_TIME_METRIC__.appInit = Date.now()
 `;
 
-const _qUbWYLqvZye3Fqpu2aN_SC8PK6rPo0h3zgw3pYD4cyo = (function(nitro) {
+const _BS71uHFznVT5GIuJiGVV5dttwSMuK9tG9VyVf9BAgA = (function(nitro) {
   nitro.hooks.hook("render:html", (htmlContext) => {
     htmlContext.head.push(`<script>${script}<\/script>`);
   });
@@ -2093,7 +2099,7 @@ const appSpaLoaderAttrs = {"id":"__nuxt-loader"};
 
 const appId = "nuxt-app";
 
-const rootDir = "C:/Users/user/Downloads/Projects/Test Mine/Tracker - logs";
+const rootDir = "/Users/mister_tej/Projects/products/worktracker";
 
 //#region src/runtime/plugins/dev-server-logs.ts
 const devReducers = {
@@ -2104,7 +2110,7 @@ const devReducers = {
 	URL: (data) => data instanceof URL ? data.toString() : void 0,
 	Symbol: (data) => typeof data === "symbol" ? data.description ?? "" : void 0
 };
-const asyncContext = getContext("nuxt-dev", {
+const asyncContext = getContext$1("nuxt-dev", {
 	asyncContext: true,
 	AsyncLocalStorage
 });
@@ -2170,7 +2176,7 @@ function onConsoleLog(callback) {
 }
 
 const plugins = [
-  _qUbWYLqvZye3Fqpu2aN_SC8PK6rPo0h3zgw3pYD4cyo,
+  _BS71uHFznVT5GIuJiGVV5dttwSMuK9tG9VyVf9BAgA,
 dev_server_logs_default,
 _wH6JrtIxmaSoA8lCPWFnE9z4lQeXW6H5z3l5aymEQw
 ];
@@ -2178,16 +2184,16 @@ _wH6JrtIxmaSoA8lCPWFnE9z4lQeXW6H5z3l5aymEQw
 const assets = {
   "/index.mjs": {
     "type": "text/javascript; charset=utf-8",
-    "etag": "\"1c3a2-I1fd1qjjwh5C/A68ueRvuiqKAhs\"",
-    "mtime": "2026-09-18T09:20:30.016Z",
-    "size": 115618,
+    "etag": "\"1c213-xvggwnHQwUgcHYwTgXN0P4abybU\"",
+    "mtime": "2026-09-18T16:54:25.456Z",
+    "size": 115219,
     "path": "index.mjs"
   },
   "/index.mjs.map": {
     "type": "application/json",
-    "etag": "\"713bb-F22aN9btZoefE5dQfjP4KaQfr/I\"",
-    "mtime": "2026-09-18T09:20:30.002Z",
-    "size": 463803,
+    "etag": "\"71521-VZnjKz1ssDpYnw9mdsYsfzyEoMM\"",
+    "mtime": "2026-09-18T16:54:25.456Z",
+    "size": 464161,
     "path": "index.mjs.map"
   }
 };
@@ -2215,7 +2221,7 @@ function getAsset (id) {
 
 const METHODS = /* @__PURE__ */ new Set(["HEAD", "GET"]);
 const EncodingMap = { gzip: ".gz", br: ".br" };
-const _24xmBp = eventHandler((event) => {
+const _LP42gf = eventHandler((event) => {
   if (event.method && !METHODS.has(event.method)) {
     return;
   }
@@ -2790,13 +2796,13 @@ async function getIslandContext(event) {
 	};
 }
 
-const _lazy_nWxeDs = () => Promise.resolve().then(function () { return renderer; });
+const _lazy_9fpZ3E = () => Promise.resolve().then(function () { return renderer; });
 
 const handlers = [
-  { route: '', handler: _24xmBp, lazy: false, middleware: true, method: undefined },
-  { route: '/__nuxt_error', handler: _lazy_nWxeDs, lazy: true, middleware: false, method: undefined },
+  { route: '', handler: _LP42gf, lazy: false, middleware: true, method: undefined },
+  { route: '/__nuxt_error', handler: _lazy_9fpZ3E, lazy: true, middleware: false, method: undefined },
   { route: '/__nuxt_island/**', handler: handler$1, lazy: false, middleware: false, method: undefined },
-  { route: '/**', handler: _lazy_nWxeDs, lazy: true, middleware: false, method: undefined }
+  { route: '/**', handler: _lazy_9fpZ3E, lazy: true, middleware: false, method: undefined }
 ];
 
 function createNitroApp() {

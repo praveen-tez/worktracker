@@ -1,5 +1,5 @@
-/// <reference types="@nuxtjs/google-fonts" />
 /// <reference types="@nuxt/devtools" />
+/// <reference types="@nuxtjs/google-fonts" />
 /// <reference types="@nuxt/telemetry" />
 /// <reference path="types/nitro-layouts.d.ts" />
 /// <reference path="types/builder-env.d.ts" />

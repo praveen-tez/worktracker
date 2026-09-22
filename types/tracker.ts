@@ -36,7 +36,19 @@ export interface LogEntry {
   tags?: string[]
 }
 
-export interface Todo { id: string; title: string; detail: string; due: string; status: 'Pending' | 'In Progress' | 'Completed'; priority: Priority }
+export interface Todo {
+  id: string
+  title: string
+  detail: string
+  due: string
+  status: 'Pending' | 'In Progress' | 'Completed'
+  priority: Priority
+  link?: string
+  fileName?: string
+  fileData?: string
+  month?: string
+  createdDate?: string
+}
 export interface Feedback { id: string; date: string; author: string; context: string; text: string; status: 'Open' | 'Actioned' }
 export interface Meeting { id: string; date: string; title: string; attendees: string; notes: string; followUp: string }
 
@@ -58,6 +70,7 @@ export interface TrackerData {
   meetings: Meeting[]
   projects: string[]
   users: string[]
+  tags?: string[]
   notifications: NotificationItem[]
 }
 

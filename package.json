@@ -2,7 +2,17 @@
   "name": "monthly-time-tracker",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "nuxt dev", "build": "nuxt build", "preview": "nuxt preview" },
-  "dependencies": { "@nuxtjs/google-fonts": "latest", "nuxt": "latest", "vue": "latest", "vue-router": "latest" },
-  "devDependencies": {}
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "preview": "nuxt preview"
+  },
+  "dependencies": {
+    "@nuxtjs/google-fonts": "latest",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "nuxt": "latest",
+    "vue": "latest",
+    "vue-router": "latest"
+  }
 }

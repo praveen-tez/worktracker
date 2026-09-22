@@ -4,7 +4,7 @@ import { useSSRContext, mergeProps } from 'vue';
 import { ssrRenderAttrs, ssrInterpolate } from 'vue/server-renderer';
 import 'nostics';
 import 'nostics/formatters/ansi';
-import '../_/nitro.mjs';
+import '../nitro/nitro.mjs';
 import 'node:http';
 import 'node:https';
 import 'node:events';
