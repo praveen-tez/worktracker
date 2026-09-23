@@ -3149,3 +3149,630 @@ input[type="date"], input[type="time"] {
   }
 }
 
+/* ==========================================================================
+   MULTI-SELECT BULK ACTIONS TOOLBAR & TABLE CHECKBOXES
+   ========================================================================== */
+.bulk-actions-toolbar {
+  position: sticky;
+  top: 76px;
+  z-index: 90;
+  margin-bottom: 16px;
+  background: #17243b;
+  color: #ffffff;
+  border-radius: 10px;
+  padding: 10px 16px;
+  box-shadow: 0 8px 24px rgba(23, 36, 59, 0.25);
+  animation: slideDownBulk 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDownBulk {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bulk-toolbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.bulk-selected-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.bulk-check-icon {
+  width: 22px;
+  height: 22px;
+  background: #3569df;
+  color: #fff;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bulk-count-text b {
+  color: #60a5fa;
+  font-size: 14px;
+}
+
+.bulk-actions-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bulk-btn-export {
+  background: #3569df !important;
+  color: #ffffff !important;
+  border: 0 !important;
+  height: 34px !important;
+  padding: 0 14px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(53, 105, 223, 0.4) !important;
+}
+
+.bulk-btn-export:hover {
+  background: #2554c7 !important;
+  transform: translateY(-1px);
+}
+
+.bulk-btn-delete {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border: 0 !important;
+  height: 34px !important;
+  padding: 0 14px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35) !important;
+}
+
+.bulk-btn-delete:hover {
+  background: #b91c1c !important;
+  transform: translateY(-1px);
+}
+
+.bulk-btn-clear {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #cbd5e1 !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  height: 34px !important;
+  padding: 0 12px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.bulk-btn-clear:hover {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+}
+
+/* Table Checkbox Styling */
+.custom-table-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #3569df;
+  cursor: pointer;
+  border-radius: 4px;
+  vertical-align: middle;
+  transition: transform 0.1s ease;
+}
+
+.custom-table-checkbox:hover {
+  transform: scale(1.1);
+}
+
+/* Dynamic Row Checkbox Visibility */
+.day-table-panel td.select-col .custom-table-checkbox {
+  opacity: 0.35;
+  transition: opacity 0.15s ease, transform 0.12s ease;
+}
+
+.day-table-panel tr:hover td.select-col .custom-table-checkbox,
+.day-table-panel tr.row-selected td.select-col .custom-table-checkbox,
+.day-table-panel.selection-active td.select-col .custom-table-checkbox {
+  opacity: 1;
+}
+
+.day-table-panel tbody tr.row-selected {
+  background: #f0f6ff !important;
+}
+
+.dark .day-table-panel tbody tr.row-selected {
+  background: #1e304f !important;
+}
+
+/* ==========================================================================
+   CLEAN, SUBTLE TAG BADGES IN PROJECTS COLUMN
+   ========================================================================== */
+.table-project-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.project-pill-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #15243b);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dark .project-pill-label {
+  color: #eaf0f8;
+}
+
+.tag-badges-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.tag-badge-item {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  border-radius: 4px !important;
+  padding: 2px 7px !important;
+  line-height: 1.3 !important;
+  letter-spacing: 0.1px !important;
+  box-shadow: none !important;
+  transition: all 0.15s ease !important;
+}
+
+.tag-badge-item:hover {
+  background: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+.dark .tag-badge-item {
+  background: #1e2d48 !important;
+  border-color: #2b3e5f !important;
+  color: #94a3b8 !important;
+}
+
+.dark .tag-badge-item:hover {
+  background: #283a5c !important;
+  color: #cbd5e1 !important;
+}
+
+/* ==========================================================================
+   UNIFIED HEIGHT, PADDING & BORDER RADIUS FOR BUTTONS & CALENDAR CONTROL
+   ========================================================================== */
+.month-select {
+  height: 38px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: #ffffff !important;
+  border: 1px solid var(--line, #e4eaf2) !important;
+  box-sizing: border-box !important;
+}
+
+.month-select button {
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 14px !important;
+  color: #64748b !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.month-select button:hover {
+  background: #f1f5f9 !important;
+  color: var(--blue, #3569df) !important;
+}
+
+.month-select b {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--ink, #15243b) !important;
+  min-width: 120px !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  line-height: 1 !important;
+}
+
+.btn-month-cal {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #f0f4fa !important;
+  border: 1px solid var(--line, #e4eaf2) !important;
+  color: var(--blue, #3569df) !important;
+  cursor: pointer !important;
+  transition: background 0.15s ease !important;
+}
+
+.btn-month-cal:hover {
+  background: #e2eaf7 !important;
+}
+
+.button,
+.top-actions .btn-add-new-dropdown,
+.btn-add-new-dropdown {
+  height: 38px !important;
+  padding: 0 15px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  box-sizing: border-box !important;
+  line-height: 1 !important;
+  transition: all 0.18s ease !important;
+  border: 1px solid var(--line, #e4eaf2);
+  background: #ffffff;
+  color: var(--ink, #15243b);
+}
+
+.button.primary {
+  background: var(--blue, #3569df) !important;
+  border-color: var(--blue, #3569df) !important;
+  color: #ffffff !important;
+  box-shadow: 0 3px 10px rgba(53, 105, 223, 0.25) !important;
+}
+
+.button.primary:hover {
+  background: #2554c7 !important;
+  border-color: #2554c7 !important;
+  transform: translateY(-1px);
+}
+
+.button:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.dark .month-select {
+  background: #18243a !important;
+  border-color: #2a3952 !important;
+}
+
+.dark .month-select b {
+  color: #eaf0f8 !important;
+}
+
+.dark .month-select button {
+  color: #94a3b8 !important;
+}
+
+.dark .month-select button:hover {
+  background: #202e46 !important;
+  color: #60a5fa !important;
+}
+
+.dark .btn-month-cal {
+  background: #202e46 !important;
+  border-color: #2b3e5f !important;
+}
+
+.dark .button {
+  background: #18243a !important;
+  border-color: #2a3952 !important;
+  color: #eaf0f8 !important;
+}
+
+.dark .button:hover {
+  background: #202e46 !important;
+}
+
+/* ==========================================================================
+   CLICKABLE CALENDAR SELECT-ALL & 3-DOTS CONTEXTUAL BULK POPOVER MENU
+   ========================================================================== */
+.btn-cal-select-all {
+  background: #f0f4fa;
+  border: 1px solid var(--line, #e4eaf2);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  padding: 0;
+  margin-right: 2px;
+}
+
+.btn-cal-select-all:hover {
+  background: #3569df;
+  border-color: #3569df;
+  transform: scale(1.08);
+  box-shadow: 0 3px 8px rgba(53, 105, 223, 0.3);
+}
+
+.btn-cal-select-all.all-selected,
+.btn-cal-select-all.some-selected {
+  background: #3569df;
+  border-color: #3569df;
+  box-shadow: 0 0 0 2px rgba(53, 105, 223, 0.25);
+}
+
+.dark .btn-cal-select-all {
+  background: #202e46;
+  border-color: #2b3e5f;
+}
+
+.date-entries-count.has-selected {
+  background: #eef4ff;
+  color: #3569df;
+  font-weight: 600;
+  border: 1px solid #c7d8fc;
+}
+
+.dark .date-entries-count.has-selected {
+  background: #1e304f;
+  color: #60a5fa;
+  border-color: #2e4162;
+}
+
+/* 3-Dots Popover Actions Dropdown Menu */
+.group-bulk-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+}
+
+.date-log-group-card,
+.day-table-panel {
+  overflow: visible !important;
+}
+
+.btn-dots-menu {
+  background: transparent !important;
+  border: 0 !important;
+  color: #64748b !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  padding: 2px 6px !important;
+  border-radius: 5px !important;
+  box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.15s ease !important;
+  line-height: 1 !important;
+}
+
+.btn-dots-menu.sm {
+  padding: 2px 6px !important;
+  font-size: 16px !important;
+  height: 24px !important;
+}
+
+.btn-dots-menu:hover {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+.dark .btn-dots-menu {
+  color: #94a3b8 !important;
+}
+
+.dark .btn-dots-menu:hover {
+  background: #202e46 !important;
+  color: #eaf0f8 !important;
+}
+
+.bulk-popover-menu {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid var(--line, #e4eaf2);
+  border-radius: 9px;
+  box-shadow: 0 10px 28px rgba(23, 36, 59, 0.22);
+  padding: 6px;
+  z-index: 500 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 190px;
+  animation: popoverFade 0.15s ease;
+}
+
+.bulk-popover-menu.right-aligned {
+  left: auto;
+  right: 0;
+}
+
+@keyframes popoverFade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bulk-popover-menu button {
+  background: transparent !important;
+  border: 0 !important;
+  color: var(--ink, #15243b) !important;
+  padding: 8px 12px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  transition: background 0.12s ease !important;
+}
+
+.bulk-popover-menu button:hover {
+  background: #eef4ff !important;
+  color: var(--blue, #3569df) !important;
+}
+
+.bulk-popover-menu button.delete-opt:hover {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+}
+
+.bulk-popover-menu button.clear-opt:hover {
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+}
+
+.dark .bulk-popover-menu {
+  background: #18243a;
+  border-color: #2a3952;
+}
+
+.dark .bulk-popover-menu button {
+  color: #eaf0f8 !important;
+}
+
+.dark .bulk-popover-menu button:hover {
+  background: #202e46 !important;
+  color: #60a5fa !important;
+}
+
+/* ==========================================================================
+   Fixed Sticky Navbar & To-do KPI Metrics Strip Styling
+   ========================================================================== */
+
+/* Pinned sticky topbar navbar across all pages */
+.topbar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 100 !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid var(--line, #e4eaf2) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03) !important;
+}
+
+.dark .topbar {
+  background: #18243a !important;
+  border-bottom-color: #2a3952 !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Streamlined To-do KPI Metrics Strip */
+.todo-month-strip {
+  background: #ffffff;
+  border: 1px solid var(--line, #e4eaf2);
+  border-radius: 12px;
+  padding: 16px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(22, 36, 58, 0.04);
+}
+
+.todo-month-metrics {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.todo-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 120px;
+}
+
+.todo-metric-item label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.todo-metric-item strong {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink, #15243b);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.todo-metric-item strong.amber { color: #d97706; }
+.todo-metric-item strong.blue { color: #3569df; }
+.todo-metric-item strong.green { color: #10b981; }
+
+.metric-pct-pill {
+  font-size: 11px;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.metric-pct-pill.green {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.dark .todo-month-strip {
+  background: #18243a;
+  border-color: #2a3952;
+}
+
+.dark .todo-metric-item label {
+  color: #94a3b8;
+}
+
+.dark .todo-metric-item strong {
+  color: #eaf0f8;
+}
+
+.dark .metric-pct-pill {
+  background: #202e46;
+  color: #cbd5e1;
+}
+
+.dark .metric-pct-pill.green {
+  background: #14532d;
+  color: #86efac;
+}

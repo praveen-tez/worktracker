@@ -428,6 +428,61 @@ interface DateLogGroup {
   items: LogEntry[]
 }
 
+/* --- Multi-Select & Bulk Actions for Logs --- */
+const selectedLogIds = ref<string[]>([])
+const exportOnlySelected = ref(false)
+const bulkMenuOpenGroupDate = ref<string | null>(null)
+
+const isLogSelected = (id: string): boolean => selectedLogIds.value.includes(id)
+
+const toggleLogSelect = (id: string) => {
+  if (selectedLogIds.value.includes(id)) {
+    selectedLogIds.value = selectedLogIds.value.filter(x => x !== id)
+  } else {
+    selectedLogIds.value.push(id)
+  }
+}
+
+const isGroupAllSelected = (group: DateLogGroup): boolean => {
+  return group.items.length > 0 && group.items.every(item => selectedLogIds.value.includes(item.id))
+}
+
+const getGroupSelectedCount = (group: DateLogGroup): number => {
+  return group.items.filter(item => selectedLogIds.value.includes(item.id)).length
+}
+
+const toggleSelectAllLogsInGroup = (group: DateLogGroup) => {
+  if (isGroupAllSelected(group)) {
+    const groupIds = group.items.map(i => i.id)
+    selectedLogIds.value = selectedLogIds.value.filter(id => !groupIds.includes(id))
+  } else {
+    const groupIds = group.items.map(i => i.id)
+    selectedLogIds.value = Array.from(new Set([...selectedLogIds.value, ...groupIds]))
+  }
+}
+
+const toggleBulkMenu = (dateStr: string) => {
+  if (bulkMenuOpenGroupDate.value === dateStr) {
+    bulkMenuOpenGroupDate.value = null
+  } else {
+    bulkMenuOpenGroupDate.value = dateStr
+  }
+}
+
+const clearLogSelection = () => {
+  selectedLogIds.value = []
+  bulkMenuOpenGroupDate.value = null
+}
+
+const deleteSelectedLogs = () => {
+  if (!selectedLogIds.value.length) return
+  const count = selectedLogIds.value.length
+  selectedLogIds.value.forEach(id => removeLog(id))
+  selectedLogIds.value = []
+  bulkMenuOpenGroupDate.value = null
+  notice(`Deleted ${count} selected log ${count === 1 ? 'entry' : 'entries'}!`)
+}
+
 const groupedLogsByDate = computed<DateLogGroup[]>(() => {
   const groupsMap = new Map<string, LogEntry[]>()
 
@@ -1298,10 +1353,11 @@ const exportFileFormat = ref<ExportFileFormat>('csv')
 const exportCustomStartDate = ref('')
 const exportCustomEndDate = ref('')
 
-const openExportModal = (ctx: ExportContext) => {
+const openExportModal = (ctx: ExportContext, onlySelected: boolean = false) => {
   exportContext.value = ctx
   exportDateRange.value = 'current_month'
   exportDataType.value = 'timesheets'
+  exportOnlySelected.value = onlySelected && selectedLogIds.value.length > 0
 
   // Default custom range to the active month or current calendar month
   const [yStr, mStr] = (month.value || new Date().toISOString().slice(0, 7)).split('-')
@@ -1422,6 +1478,9 @@ const allUnifiedTimesheets = computed(() => {
 
 /* Filtered Timesheets by Date Range (Date-Wise sorted) */
 const filteredExportTimesheets = computed(() => {
+  if (exportOnlySelected.value && selectedLogIds.value.length > 0) {
+    return allUnifiedTimesheets.value.filter(item => selectedLogIds.value.includes(item.id))
+  }
   const { start, end } = computedExportRange.value
   const list = allUnifiedTimesheets.value.filter(item => {
     if (!item.date) return false
@@ -1730,6 +1789,9 @@ const closeAllPopovers = (e: MouseEvent) => {
   }
   if (!target.closest('.inline-time-editor') && !target.closest('.time-range-display-wrap')) {
     editingTimeLogId.value = null
+  }
+  if (!target.closest('.group-bulk-menu-wrap')) {
+    bulkMenuOpenGroupDate.value = null
   }
 }
 
@@ -2256,10 +2318,38 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <button class="button" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-weight:600;" @click="openExportModal('timesheets')">
+              <!-- Top Action Controls for Timesheets -->
+              <button
+                class="button"
+                :class="{ 'primary-outlined': selectedLogIds.length > 0 }"
+                style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-weight:600;"
+                @click="openExportModal('timesheets', selectedLogIds.length > 0)"
+              >
                 <span>⇩</span>
-                <span>Export</span>
+                <span>{{ selectedLogIds.length > 0 ? `Export (${selectedLogIds.length})` : 'Export' }}</span>
               </button>
+
+              <button
+                v-if="selectedLogIds.length > 0"
+                class="button danger-btn"
+                style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-weight:600;background:#dc2626;color:#ffffff;border-color:#dc2626;"
+                title="Delete selected log entries"
+                @click="deleteSelectedLogs"
+              >
+                <span>🗑</span>
+                <span>Delete ({{ selectedLogIds.length }})</span>
+              </button>
+
+              <button
+                v-if="selectedLogIds.length > 0"
+                class="button"
+                style="font-size:12px;padding:8px 10px;"
+                title="Clear selection"
+                @click="clearLogSelection"
+              >
+                ✕ Clear
+              </button>
+
               <button class="button primary" @click="modal = 'task'">＋ New log</button>
             </div>
           </div>
@@ -2310,12 +2400,13 @@ onBeforeUnmount(() => {
           <!-- Date-Grouped Timesheets & Work Logs -->
           <div class="date-grouped-logs-container">
             <div v-for="group in groupedLogsByDate" :key="group.date" class="date-log-group-card">
-              <!-- Date Header on Top (Date column removed from individual rows to maximize space) -->
+              <!-- Date Header on Top (Clean & Uncluttered) -->
               <div class="date-group-header">
                 <div class="date-group-title-side">
-                  <span class="date-cal-icon">📅</span>
                   <span class="date-group-label" :class="{ 'is-today': group.isToday }">{{ group.relativeLabel }}</span>
-                  <span class="date-entries-count">{{ group.items.length }} {{ group.items.length === 1 ? 'entry' : 'entries' }}</span>
+                  <span class="date-entries-count" :class="{ 'has-selected': getGroupSelectedCount(group) > 0 }">
+                    {{ getGroupSelectedCount(group) > 0 ? `${getGroupSelectedCount(group)}/${group.items.length} selected` : `${group.items.length} ${group.items.length === 1 ? 'entry' : 'entries'}` }}
+                  </span>
                 </div>
                 <div class="date-group-summary-side">
                   <span class="day-total-badge">
@@ -2327,25 +2418,67 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Day Table Without Redundant Date Column -->
-              <div class="panel table-panel day-table-panel">
+              <div class="panel table-panel day-table-panel" :class="{ 'selection-active': selectedLogIds.length > 0 }">
                 <table>
                   <thead>
                     <tr>
-                      <th style="width:18%;">Project Name</th>
-                      <th style="width:38%;">Task Name</th>
-                      <th style="width:18%;">Time / Hours</th>
-                      <th style="width:16%;">Assign Team / Sync</th>
-                      <th style="width:10%;text-align:right;">Actions</th>
+                      <th class="select-col" style="width:38px;text-align:center;">
+                        <input
+                          type="checkbox"
+                          class="custom-table-checkbox"
+                          :checked="isGroupAllSelected(group)"
+                          title="Select / deselect all logs for this day"
+                          @change="toggleSelectAllLogsInGroup(group)"
+                        >
+                      </th>
+                      <th style="width:20%;">Project Name</th>
+                      <th style="width:34%;">Task Name</th>
+                      <th style="width:17%;">Time / Hours</th>
+                      <th style="width:17%;">Assign Team / Sync</th>
+                      <th style="width:12%;text-align:right;">
+                        <span v-if="!getGroupSelectedCount(group)">Actions</span>
+                        <div v-else class="group-bulk-menu-wrap inline-header-menu">
+                          <button
+                            type="button"
+                            class="btn-dots-menu sm"
+                            :title="`Actions menu for ${getGroupSelectedCount(group)} selected items`"
+                            @click.stop="toggleBulkMenu(group.date + '-th')"
+                          >
+                            ⋮
+                          </button>
+                          <div v-if="bulkMenuOpenGroupDate === group.date + '-th'" class="bulk-popover-menu right-aligned" @click.stop>
+                            <button type="button" @click="openExportModal('timesheets', true); bulkMenuOpenGroupDate = null">
+                              <span>⇩</span> Export selected ({{ getGroupSelectedCount(group) }})
+                            </button>
+                            <button type="button" class="delete-opt" @click="deleteSelectedLogs(); bulkMenuOpenGroupDate = null">
+                              <span>🗑</span> Delete selected ({{ getGroupSelectedCount(group) }})
+                            </button>
+                            <button type="button" class="clear-opt" @click="clearLogSelection(); bulkMenuOpenGroupDate = null">
+                              <span>✕</span> Clear selection
+                            </button>
+                          </div>
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="item in group.items" :key="item.id">
-                      <!-- 1. Project Name (with optional tags) -->
+                    <tr v-for="item in group.items" :key="item.id" :class="{ 'row-selected': isLogSelected(item.id) }">
+                      <!-- 0. Checkbox Selection -->
+                      <td class="select-col" style="width:38px;text-align:center;" @click.stop>
+                        <input
+                          type="checkbox"
+                          class="custom-table-checkbox"
+                          :checked="isLogSelected(item.id)"
+                          @change="toggleLogSelect(item.id)"
+                        >
+                      </td>
+
+                      <!-- 1. Project Name (with subtle clean tags) -->
                       <td>
                         <div class="table-project-cell">
                           <span class="project-pill-label">📁 {{ item.project || (item.text ? item.text.split(' · ')[2] : 'Project Alpha') }}</span>
-                          <div v-if="item.tags && item.tags.length" class="tag-badges-wrapper" style="margin-top:4px;">
-                            <span v-for="tag in item.tags" :key="tag" class="tag-badge-item" style="font-size:9px;padding:1px 6px;">{{ tag }}</span>
+                          <div v-if="item.tags && item.tags.length" class="tag-badges-wrapper">
+                            <span v-for="tag in item.tags" :key="tag" class="tag-badge-item">{{ tag }}</span>
                           </div>
                         </div>
                       </td>
@@ -2424,18 +2557,6 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="page-head-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-              <button
-                v-if="filteredKanbanTodos.length"
-                type="button"
-                class="button"
-                style="font-size:12px;padding:8px 12px;display:inline-flex;align-items:center;gap:6px;"
-                :title="allTodosExpanded ? 'Collapse all card details' : 'Expand all card details'"
-                @click="toggleAllTodosExpand()"
-              >
-                <span>{{ allTodosExpanded ? '▲' : '▼' }}</span>
-                <span>{{ allTodosExpanded ? 'Collapse cards' : 'Expand cards' }}</span>
-              </button>
-
               <div class="month-select">
                 <button @click="shift(-1)">‹</button>
                 <b>{{ monthLabel }}</b>
@@ -2469,28 +2590,29 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- Monthly Task Metrics & Mini Interactive Calendar Strip -->
+          <!-- Clean Streamlined To-do KPI Metrics Strip -->
           <div class="todo-month-strip">
             <div class="todo-month-metrics">
               <div class="todo-metric-item">
-                <label>Total in {{ monthLabel.split(' ')[0] }}</label>
-                <strong>{{ todoMonthStats.total }} <small>tasks</small></strong>
+                <label>Total Tasks</label>
+                <strong>{{ todoMonthStats.total }}</strong>
               </div>
               <div class="todo-metric-item">
                 <label>Pending</label>
-                <strong>{{ todoMonthStats.pending }}</strong>
+                <strong class="amber">{{ todoMonthStats.pending }}</strong>
               </div>
               <div class="todo-metric-item">
-                <label>In Progress / Moved</label>
-                <strong>{{ todoMonthStats.inProgress }}</strong>
+                <label>In Progress</label>
+                <strong class="blue">{{ todoMonthStats.inProgress }}</strong>
               </div>
               <div class="todo-metric-item">
                 <label>Completed</label>
-                <strong class="green">{{ todoMonthStats.completed }}</strong>
-              </div>
-              <div class="todo-metric-item">
-                <label>Delivery Rate</label>
-                <strong :class="{ green: todoMonthStats.completedPct >= 70 }">{{ todoMonthStats.completedPct }}%</strong>
+                <strong class="green">
+                  {{ todoMonthStats.completed }}
+                  <span class="metric-pct-pill" :class="{ green: todoMonthStats.completedPct >= 70 }">
+                    {{ todoMonthStats.completedPct }}% done
+                  </span>
+                </strong>
               </div>
             </div>
           </div>
