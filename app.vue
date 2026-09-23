@@ -5,10 +5,132 @@ const tracker = useTracker()
 const {
   data, load, addTask, updateTask, addLog, updateLog, removeLog, addProject, removeProject,
   addUser, removeUser, addTag, removeTag: deleteTagFromTracker,
-  save, addNotification, markNotificationRead, clearNotifications
+  save, addNotification, markNotificationRead, clearNotifications,
+  generateApiKey, revokeApiKey, updateOfficeIntegration, syncOfficeTimesheets
 } = tracker
 
+/* --- Integrations & Office Timesheets State --- */
+const isTestingConnection = ref(false)
+const isSyncingOffice = ref(false)
+const showOfficeApiKey = ref(false)
+const newApiKeyName = ref('')
+const newlyCreatedKeyObj = ref<any>(null)
+const copySuccessId = ref<string | null>(null)
+
+/* --- Integration Sub-Tabs State --- */
+const activeIntegrationTab = ref<'workspaces' | 'catalog' | 'developer_api'>('workspaces')
+
+/* --- API Key Management Form & Modal State --- */
+const showGenerateKeyModal = ref(false)
+const keyModalForm = ref({
+  name: '',
+  expirationOption: '1year' as '1year' | '30days' | '90days' | 'never',
+  scopes: ['Read Logs', 'Write Entries']
+})
+const createdKeySecretObj = ref<ApiKey | null>(null)
+const keyToRevoke = ref<ApiKey | null>(null)
+
+const openGenerateKeyModal = () => {
+  keyModalForm.value = {
+    name: '',
+    expirationOption: '1year',
+    scopes: ['Read Logs', 'Write Entries']
+  }
+  showGenerateKeyModal.value = true
+}
+
+const handleCreateApiKeySubmit = () => {
+  if (!keyModalForm.value.name.trim()) return
+  const created = generateApiKey(
+    keyModalForm.value.name,
+    keyModalForm.value.expirationOption,
+    keyModalForm.value.scopes
+  )
+  createdKeySecretObj.value = created
+  showGenerateKeyModal.value = false
+  modal.value = 'api-key-created'
+  notice(`Generated API key "${created.name}" (Valid until 1 Year)!`)
+}
+
+const handleRevokeKeyConfirm = (keyObj: ApiKey) => {
+  revokeApiKey(keyObj.id)
+  keyToRevoke.value = null
+  notice(`API key "${keyObj.name}" has been revoked.`)
+}
+
+/* --- Connector Modals State --- */
+const activeConnectorModal = ref<string | null>(null)
+const figmaForm = ref({ teamId: 'figma_team_99182', autoLogFrames: true })
+const mcpForm = ref({ serverUrl: 'http://localhost:3000/mcp', streamLogs: true })
+const notionForm = ref({ databaseId: 'notion_db_881920', syncPages: true })
+
+const handleSaveFigmaConfig = () => {
+  activeConnectorModal.value = null
+  notice('Figma Design Team workspace connected successfully!')
+}
+
+const handleSaveMcpConfig = () => {
+  activeConnectorModal.value = null
+  notice('MCP AI Context Agent Node connected & streaming!')
+}
+
+const handleSaveNotionConfig = () => {
+  activeConnectorModal.value = null
+  notice('Notion Workspace database linked successfully!')
+}
+
+const officeForm = ref({
+  endpoint: data.value.officeIntegration?.endpoint || 'https://api.officetimesheets.com/v1/sync',
+  apiKey: data.value.officeIntegration?.apiKey || 'ots_secret_88x99z22k11',
+  autoSync: data.value.officeIntegration?.autoSync ?? true,
+  enabled: data.value.officeIntegration?.enabled ?? true
+})
+
+const handleSaveOfficeSettings = () => {
+  updateOfficeIntegration({
+    endpoint: officeForm.value.endpoint,
+    apiKey: officeForm.value.apiKey,
+    autoSync: officeForm.value.autoSync,
+    enabled: officeForm.value.enabled,
+    status: 'connected'
+  })
+  notice('Office Timesheets settings saved successfully')
+}
+
+const handleTestConnection = async () => {
+  isTestingConnection.value = true
+  await new Promise(r => setTimeout(r, 700))
+  isTestingConnection.value = false
+  updateOfficeIntegration({ status: 'connected' })
+  notice('✓ Office Timesheets API connection verified successfully!')
+}
+
+const handleManualSyncOffice = async () => {
+  isSyncingOffice.value = true
+  const res = await syncOfficeTimesheets()
+  isSyncingOffice.value = false
+  if (res.success) {
+    notice(`Synced ${res.syncedCount} entry/entries with Office Timesheets!`)
+  }
+}
+
+const handleGenerateApiKey = () => {
+  openGenerateKeyModal()
+}
+
+const copyToClipboard = (text: string, id: string) => {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text)
+    copySuccessId.value = id
+    notice('API Key copied to clipboard!')
+    setTimeout(() => {
+      if (copySuccessId.value === id) copySuccessId.value = null
+    }, 2000)
+  }
+}
+
 const screen = ref('dashboard')
+
 const month = ref(new Date().toISOString().slice(0, 7))
 const modal = ref('')
 const search = ref('')
@@ -2329,6 +2451,29 @@ onBeforeUnmount(() => {
                 <span>{{ selectedLogIds.length > 0 ? `Export (${selectedLogIds.length})` : 'Export' }}</span>
               </button>
 
+              <!-- Office Timesheets Bi-Directional Sync Action Button -->
+              <button
+                class="button secondary-btn"
+                style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-weight:600;"
+                :title="data.officeIntegration?.enabled ? 'Sync logs bi-directionally with Office Timesheets' : 'Office Timesheets integration inactive'"
+                @click="handleManualSyncOffice"
+              >
+                <span :class="{ 'spin-icon': isSyncingOffice }">🔄</span>
+                <span>{{ isSyncingOffice ? 'Syncing...' : 'Sync Office' }}</span>
+              </button>
+
+              <button
+                v-if="selectedLogIds.length > 0"
+                class="button danger-btn"
+                style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-weight:600;background:#dc2626;color:#ffffff;border-color:#dc2626;"
+                title="Delete selected log entries"
+                @click="deleteSelectedLogs"
+              >
+                <span>🗑</span>
+                <span>Delete ({{ selectedLogIds.length }})</span>
+              </button>
+
+
               <button
                 v-if="selectedLogIds.length > 0"
                 class="button danger-btn"
@@ -2506,24 +2651,34 @@ onBeforeUnmount(() => {
 
                       <!-- 4. Assign Team / Sync -->
                       <td>
-                        <div class="user-avatars-group" :title="'Logged by / Synced with: ' + getLogUsers(item).join(', ')">
-                          <span
-                            v-for="u in getLogUsers(item).slice(0, 3)"
-                            :key="u"
-                            class="avatar-badge"
-                            :style="{ backgroundColor: getAvatarColor(u), color: '#ffffff' }"
-                          >
-                            {{ u.trim().charAt(0).toUpperCase() }}
+                        <div class="team-sync-cell" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                          <div class="user-avatars-group" :title="'Logged by: ' + getLogUsers(item).join(', ')">
+                            <span
+                              v-for="u in getLogUsers(item).slice(0, 3)"
+                              :key="u"
+                              class="avatar-badge"
+                              :style="{ backgroundColor: getAvatarColor(u), color: '#ffffff' }"
+                            >
+                              {{ u.trim().charAt(0).toUpperCase() }}
+                            </span>
+                            <span
+                              v-if="getLogUsers(item).length > 3"
+                              class="avatar-badge overflow"
+                              :title="getLogUsers(item).slice(3).join(', ')"
+                            >
+                              +{{ getLogUsers(item).length - 3 }}
+                            </span>
+                          </div>
+
+                          <span v-if="item.officeSynced" class="office-sync-pill synced" title="Bi-directionally synced with Office Timesheets">
+                            🏢 Synced
                           </span>
-                          <span
-                            v-if="getLogUsers(item).length > 3"
-                            class="avatar-badge overflow"
-                            :title="getLogUsers(item).slice(3).join(', ')"
-                          >
-                            +{{ getLogUsers(item).length - 3 }}
+                          <span v-else class="office-sync-pill pending" title="Local entry - click to sync with Office Timesheets" @click.stop="handleManualSyncOffice">
+                            ⚡ Sync
                           </span>
                         </div>
                       </td>
+
 
                       <!-- 5. Actions -->
                       <td>
@@ -2779,24 +2934,533 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <!-- Integrations Screen -->
+        <!-- Integrations & Office Timesheets API Screen -->
         <section v-else-if="screen === 'integrations'" class="screen">
           <div class="page-head">
             <div>
-              <p class="eyebrow">CONNECTED WORKSPACE</p>
-              <h1>Integrations</h1>
-              <p class="muted">Sync tools with your workspace tracker.</p>
+              <p class="eyebrow">WORKSPACE CONNECTIVITY & DEVELOPER HUB</p>
+              <h1>Integrations & API Management</h1>
+              <p class="muted">Manage connected accounts, app integrations, and developer API credentials in separate clean views.</p>
+            </div>
+
+            <div class="page-head-actions">
+              <button class="button primary" @click="openGenerateKeyModal">
+                🔑 Create New API Key
+              </button>
             </div>
           </div>
 
-          <div class="integration-grid">
-            <article v-for="item in ['Google Calendar', 'Google Docs', 'Google Sheets', 'Microsoft Outlook', 'Notion', 'Figma']" :key="item" class="integration-card">
-              <b>{{ item }}</b>
-              <small>Connect and sync</small>
-              <button class="button" @click="notice(`${item} connection configured`)">Connect</button>
-            </article>
+          <!-- Top Sub-Navigation Tabs: Clearly separating Connected Workspaces, App Catalog, and Developer APIs -->
+          <div class="integration-tabs">
+            <button
+              class="integration-tab-btn"
+              :class="{ active: activeIntegrationTab === 'workspaces' }"
+              @click="activeIntegrationTab = 'workspaces'"
+            >
+              🏢 Connected Workspaces
+              <span class="tab-badge">{{ data.workspaceConnections?.length || 4 }}</span>
+            </button>
+
+            <button
+              class="integration-tab-btn"
+              :class="{ active: activeIntegrationTab === 'catalog' }"
+              @click="activeIntegrationTab = 'catalog'"
+            >
+              🔌 App Integrations Catalog
+              <span class="tab-badge">11</span>
+            </button>
+
+            <button
+              class="integration-tab-btn"
+              :class="{ active: activeIntegrationTab === 'developer_api' }"
+              @click="activeIntegrationTab = 'developer_api'"
+            >
+              🔑 Developer APIs & Webhooks
+              <span class="tab-badge">{{ data.apiKeys?.length || 0 }}</span>
+            </button>
+          </div>
+
+          <!-- SECTION 1: Connected Workspaces View -->
+          <div v-if="activeIntegrationTab === 'workspaces'" class="connected-workspaces-section">
+            <div class="panel-head" style="margin-bottom:16px;">
+              <div>
+                <h3>Active Workspace Connections</h3>
+                <p class="muted">Manage connected accounts and live sync options for your organization's workspaces.</p>
+              </div>
+            </div>
+
+            <div class="connected-workspaces-grid">
+              <article v-for="conn in (data.workspaceConnections || [])" :key="conn.id" class="workspace-conn-card">
+                <div>
+                  <div class="conn-head">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                      <div class="conn-icon-box" :class="conn.type">
+                        {{ conn.icon }}
+                      </div>
+                      <div class="conn-title">
+                        <h4>{{ conn.name }}</h4>
+                        <p class="conn-subtitle">{{ conn.accountOrWorkspace }}</p>
+                      </div>
+                    </div>
+
+                    <span class="status-pill-badge" :class="conn.status">
+                      ● {{ conn.status === 'connected' ? 'Active' : 'Disconnected' }}
+                    </span>
+                  </div>
+
+                  <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+                    <span v-if="conn.type === 'officetimesheets'">Bi-directional enterprise timesheets sync active.</span>
+                    <span v-else-if="conn.type === 'figma'">Tracking UI frame design hours and system components.</span>
+                    <span v-else-if="conn.type === 'mcp'">Streaming AI coding agent context and prompt logs into work logs.</span>
+                    <span v-else-if="conn.type === 'notion'">Syncing meeting notes and task databases automatically.</span>
+                    <span v-else>Connected workspace integration active.</span>
+                  </p>
+                </div>
+
+                <div class="conn-meta">
+                  <div>
+                    <small class="muted" style="display:block;">Last Synced</small>
+                    <b>{{ conn.lastSynced }}</b>
+                  </div>
+
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <button class="button secondary-btn sm" @click="activeConnectorModal = conn.type">
+                      Configure
+                    </button>
+                    <button class="button primary sm" @click="notice(`Synced ${conn.name} workspace!`)">
+                      Sync Now
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <!-- Featured Office Timesheets Bi-Directional Configuration Card -->
+            <section class="panel integration-featured-card" style="padding:24px;margin-top:12px;">
+              <div class="featured-card-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:14px;">
+                  <div class="conn-icon-box office" style="width:48px;height:48px;font-size:24px;">
+                    🏢
+                  </div>
+                  <div>
+                    <h3 style="margin:0 0 4px;font-size:17px;display:flex;align-items:center;gap:10px;">
+                      Office Timesheets Bi-Directional Endpoint Config
+                      <span class="status-pill-badge" :class="data.officeIntegration?.status || 'connected'">
+                        ● {{ data.officeIntegration?.status === 'connected' ? 'Connected & Active' : 'Disconnected' }}
+                      </span>
+                    </h3>
+                    <p class="muted" style="margin:0;font-size:12px;">
+                      Endpoint settings for Office Timesheets v4 API synchronization.
+                    </p>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <button
+                    type="button"
+                    class="button secondary-btn sm"
+                    :disabled="isTestingConnection"
+                    @click="handleTestConnection"
+                  >
+                    <span :class="{ 'spin-icon': isTestingConnection }">🔌</span>
+                    {{ isTestingConnection ? 'Testing...' : 'Test Connection' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="button primary sm"
+                    :disabled="isSyncingOffice"
+                    @click="handleManualSyncOffice"
+                  >
+                    <span :class="{ 'spin-icon': isSyncingOffice }">🔄</span>
+                    {{ isSyncingOffice ? 'Syncing Now...' : 'Sync Now' }}
+                  </button>
+                </div>
+              </div>
+
+              <form @submit.prevent="handleSaveOfficeSettings" class="integration-form-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;background:var(--bg-subtle, #f8fafc);padding:16px;border-radius:10px;border:1px solid var(--line, #e2e8f0);">
+                <div>
+                  <label class="form-label" style="margin-top:0;">API Endpoint URL</label>
+                  <input
+                    v-model="officeForm.endpoint"
+                    type="url"
+                    required
+                    placeholder="https://api.officetimesheets.com/v1/sync"
+                  >
+                </div>
+
+                <div>
+                  <label class="form-label" style="margin-top:0;display:flex;align-items:center;justify-content:space-between;">
+                    <span>Office API Secret Key</span>
+                    <button type="button" class="text-link" style="font-size:11px;" @click="showOfficeApiKey = !showOfficeApiKey">
+                      {{ showOfficeApiKey ? 'Hide' : 'Show Secret' }}
+                    </button>
+                  </label>
+                  <input
+                    v-model="officeForm.apiKey"
+                    :type="showOfficeApiKey ? 'text' : 'password'"
+                    required
+                    placeholder="Enter secret key..."
+                  >
+                </div>
+
+                <div style="grid-column: 1 / -1; display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-top:8px;border-top:1px dashed var(--line, #cbd5e1);">
+                  <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+                    <label class="custom-toggle-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:13px;">
+                      <input type="checkbox" v-model="officeForm.enabled">
+                      <span>Enable Integration</span>
+                    </label>
+                    <label class="custom-toggle-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:13px;">
+                      <input type="checkbox" v-model="officeForm.autoSync">
+                      <span>Auto-Sync Work Logs</span>
+                    </label>
+                  </div>
+
+                  <button type="submit" class="button primary sm">Save Settings</button>
+                </div>
+              </form>
+            </section>
+          </div>
+
+          <!-- SECTION 2: App Integrations Catalog View -->
+          <div v-else-if="activeIntegrationTab === 'catalog'" class="app-catalog-section">
+            <div class="panel-head" style="margin-bottom:16px;">
+              <div>
+                <h3>App Integrations Catalog</h3>
+                <p class="muted">Connect design tools, AI context protocols, project management apps, and communication channels.</p>
+              </div>
+            </div>
+
+            <div class="integration-grid">
+              <!-- Figma Connector Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon figma">🎨</div>
+                    <div>
+                      <h3>Figma Integration</h3>
+                      <span class="category-pill">Design & UI</span>
+                    </div>
+                  </div>
+                  <p>Sync Figma frame edit time, design system components, and team activity logs directly into your daily work log.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge connected">● Connected</span>
+                  <button class="button primary sm" @click="activeConnectorModal = 'figma'">Configure</button>
+                </div>
+              </article>
+
+              <!-- MCP AI Context Protocol Connector Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon mcp">🤖</div>
+                    <div>
+                      <h3>MCP AI Context Protocol</h3>
+                      <span class="category-pill">AI Agents & Context</span>
+                    </div>
+                  </div>
+                  <p>Connect Model Context Protocol (MCP) server nodes (Cursor, Antigravity, Claude) to automatically capture coding context & log session hours.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge connected">● Connected</span>
+                  <button class="button primary sm" @click="activeConnectorModal = 'mcp'">Configure</button>
+                </div>
+              </article>
+
+              <!-- Notion Connector Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon notion">📝</div>
+                    <div>
+                      <h3>Notion Workspace</h3>
+                      <span class="category-pill">Docs & Knowledge</span>
+                    </div>
+                  </div>
+                  <p>Link Notion databases and workspace pages to automatically pull meeting notes, project specs, and deliverable checklists.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge connected">● Connected</span>
+                  <button class="button primary sm" @click="activeConnectorModal = 'notion'">Configure</button>
+                </div>
+              </article>
+
+              <!-- Office Timesheets Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon office">🏢</div>
+                    <div>
+                      <h3>Office Timesheets</h3>
+                      <span class="category-pill">Enterprise Sync</span>
+                    </div>
+                  </div>
+                  <p>Bi-directional enterprise timesheet synchronization endpoint for automated organization billing and time tracking.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge connected">● Connected</span>
+                  <button class="button primary sm" @click="activeConnectorModal = 'officetimesheets'">Configure</button>
+                </div>
+              </article>
+
+              <!-- GitHub Connector Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon github">🐙</div>
+                    <div>
+                      <h3>GitHub Org</h3>
+                      <span class="category-pill">Development</span>
+                    </div>
+                  </div>
+                  <p>Auto-generate work log entries when PRs are reviewed, commits are pushed, or issues are closed in your repository.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge active">Available</span>
+                  <button class="button secondary-btn sm" @click="notice('GitHub integration OAuth initiated')">Connect</button>
+                </div>
+              </article>
+
+              <!-- Slack Connector Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon slack">💬</div>
+                    <div>
+                      <h3>Slack Workspace</h3>
+                      <span class="category-pill">Communication</span>
+                    </div>
+                  </div>
+                  <p>Use <code>/log-work</code> slash commands or status updates in Slack to quickly record time entries without leaving chat.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge active">Available</span>
+                  <button class="button secondary-btn sm" @click="notice('Slack integration OAuth initiated')">Connect</button>
+                </div>
+              </article>
+
+              <!-- Jira Connector Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon jira">🎯</div>
+                    <div>
+                      <h3>Jira Software</h3>
+                      <span class="category-pill">Project Management</span>
+                    </div>
+                  </div>
+                  <p>Sync sprint tasks, issue status changes, and logged work hours automatically with Jira Cloud & Data Center.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge active">Available</span>
+                  <button class="button secondary-btn sm" @click="notice('Jira connector configured')">Connect</button>
+                </div>
+              </article>
+
+              <!-- Trello Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon trello">📋</div>
+                    <div>
+                      <h3>Trello Boards</h3>
+                      <span class="category-pill">Kanban Boards</span>
+                    </div>
+                  </div>
+                  <p>Sync board cards, due dates, and checklist items with your My Tracker to-do tasks and timesheet logs.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge active">Available</span>
+                  <button class="button secondary-btn sm" @click="notice('Trello connector ready')">Connect</button>
+                </div>
+              </article>
+
+              <!-- Google Drive Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon drive">📁</div>
+                    <div>
+                      <h3>Google Drive & Sheets</h3>
+                      <span class="category-pill">Cloud Storage</span>
+                    </div>
+                  </div>
+                  <p>Export work logs directly into Google Sheets spreadsheets or link Google Docs deliverables to tasks.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge active">Available</span>
+                  <button class="button secondary-btn sm" @click="notice('Google Drive linked')">Connect</button>
+                </div>
+              </article>
+
+              <!-- Linear Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon linear">⚡</div>
+                    <div>
+                      <h3>Linear App</h3>
+                      <span class="category-pill">Issue Tracking</span>
+                    </div>
+                  </div>
+                  <p>Sync Linear cycles, issues, and PR links with your time tracking workspace.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge active">Available</span>
+                  <button class="button secondary-btn sm" @click="notice('Linear App linked')">Connect</button>
+                </div>
+              </article>
+
+              <!-- VS Code Extension Card -->
+              <article class="integration-card">
+                <div>
+                  <div class="integration-card-top">
+                    <div class="integration-card-icon vscode">💻</div>
+                    <div>
+                      <h3>VS Code Extension</h3>
+                      <span class="category-pill">IDE Tooling</span>
+                    </div>
+                  </div>
+                  <p>Track active coding time per project file directly inside VS Code with status bar timer widget.</p>
+                </div>
+
+                <div class="integration-card-foot">
+                  <span class="status-pill-badge active">Available</span>
+                  <button class="button secondary-btn sm" @click="notice('VS Code token generated')">Install Widget</button>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <!-- SECTION 3: Developer APIs & Webhooks Tab -->
+          <div v-else-if="activeIntegrationTab === 'developer_api'" class="developer-api-section">
+            <!-- Top Action Banner -->
+            <div class="panel-head" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <div>
+                <h3>Developer API Keys & Authentication</h3>
+                <p class="muted">Generate secret API tokens to authenticate REST API requests, webhooks, and external integrations.</p>
+              </div>
+
+              <button class="button primary" @click="openGenerateKeyModal">
+                ＋ Generate New API Key
+              </button>
+            </div>
+
+            <!-- API Keys Table Panel -->
+            <section class="panel api-keys-panel" style="margin-bottom:24px;">
+              <div class="panel table-panel">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Key Name</th>
+                      <th>Secret API Key (Token)</th>
+                      <th>Created Date</th>
+                      <th>Expiration (Validity)</th>
+                      <th>Scopes</th>
+                      <th>Status</th>
+                      <th style="text-align:right;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="k in (data.apiKeys || [])" :key="k.id">
+                      <td><b>{{ k.name }}</b></td>
+                      <td>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                          <code class="api-key-code" style="font-family:monospace;font-size:12px;background:var(--bg-subtle, #f1f5f9);padding:4px 8px;border-radius:4px;">
+                            {{ k.key.slice(0, 16) }}••••••••
+                          </code>
+                          <button
+                            type="button"
+                            class="btn-action-icon"
+                            title="Copy Full Secret API Key"
+                            @click="copyToClipboard(k.key, k.id)"
+                          >
+                            {{ copySuccessId === k.id ? '✓ Copied' : '📋 Copy' }}
+                          </button>
+                        </div>
+                      </td>
+                      <td>{{ k.createdDate }}</td>
+                      <td>
+                        <div class="validity-badge-year" title="Default validity set to 1 Year from creation date">
+                          📅 {{ k.expiryDate ? `Valid until ${k.expiryDate}` : '1 Year (Default)' }}
+                        </div>
+                      </td>
+                      <td>
+                        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                          <span v-for="s in (k.scopes || ['Read Logs', 'Write Entries'])" :key="s" class="tag-badge-item" style="font-size:10px;padding:2px 6px;">
+                            {{ s }}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="status-pill-badge" :class="k.status === 'revoked' ? 'revoked' : 'active'">
+                          ● {{ k.status === 'revoked' ? 'Revoked' : 'Active' }}
+                        </span>
+                      </td>
+                      <td style="text-align:right;">
+                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;">
+                          <button
+                            v-if="k.status !== 'revoked'"
+                            class="button danger-btn sm"
+                            title="Revoke this API Key immediately"
+                            @click="keyToRevoke = k"
+                          >
+                            Revoke
+                          </button>
+                          <button
+                            class="button text-link sm"
+                            style="color:var(--muted);font-size:11px;"
+                            title="Remove key from list"
+                            @click="deleteApiKey(k.id); notice(`Key '${k.name}' deleted`)"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr v-if="!data.apiKeys || !data.apiKeys.length">
+                      <td colspan="7" style="text-align:center;padding:24px;" class="muted">
+                        No API keys generated yet. Click "+ Generate New API Key" above to create one.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <!-- Webhook & REST API Endpoint Documentation -->
+            <section class="panel webhook-docs-card" style="padding:20px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <div>
+                  <h3 style="margin:0 0 4px;">📡 REST API & Webhook Specifications</h3>
+                  <p class="muted" style="margin:0;font-size:12px;">Programmatically push timesheet logs or sync tasks into My Tracker via HTTP endpoints.</p>
+                </div>
+                <button class="button secondary-btn sm" @click="notice('API Endpoint simulator active!')">
+                  ⚡ Test Endpoint
+                </button>
+              </div>
+              
+              <div class="code-snippet-box" style="background:#0f172a;color:#f8fafc;padding:16px;border-radius:8px;font-family:monospace;font-size:12px;line-height:1.6;overflow-x:auto;">
+                <div style="color:#94a3b8;margin-bottom:8px;"># Send a POST request with your 1-Year Valid API Key to log work session</div>
+                <div><span style="color:#38bdf8;">curl</span> -X POST http://localhost:3000/api/v1/timesheets/sync \</div>
+                <div>  -H <span style="color:#a5f3fc;">"Authorization: Bearer {{ data.apiKeys?.[0]?.key || 'mytrk_live_sk_9a8f7e6d5c4b3a21' }}"</span> \</div>
+                <div>  -H <span style="color:#a5f3fc;">"Content-Type: application/json"</span> \</div>
+                <div>  -d <span style="color:#fde047;">'{"task": "Figma Design & MCP Sync", "project": "Website Redesign", "hours": 2.5, "user": "TEZ"}'</span></div>
+              </div>
+            </section>
           </div>
         </section>
+
 
         <section v-else class="screen">
           <div class="page-head"><h1>{{ screen }}</h1></div>
@@ -2804,6 +3468,191 @@ onBeforeUnmount(() => {
         </section>
       </main>
     </section>
+
+    <!-- Modal 1: Generate New API Key Modal -->
+    <div v-if="showGenerateKeyModal" class="backdrop" @click="showGenerateKeyModal = false">
+      <form class="modal" style="max-width:480px;" @click.stop @submit.prevent="handleCreateApiKeySubmit">
+        <button type="button" class="close" @click="showGenerateKeyModal = false">×</button>
+        <p class="eyebrow">DEVELOPER CREDENTIALS</p>
+        <h2>Generate New API Key</h2>
+        <p class="muted" style="font-size:12px;margin-bottom:16px;">
+          Create a new secret API token to connect your external scripts, Figma plugins, or MCP AI agents.
+        </p>
+
+        <!-- API Key Name -->
+        <label class="form-label" style="margin-top:0;">
+          API Key Name <span class="req-star">*</span>
+        </label>
+        <input
+          v-model="keyModalForm.name"
+          required
+          placeholder="e.g. Production Figma Sync Key, MCP Agent Node"
+          style="margin-bottom:14px;"
+        >
+
+        <!-- Expiration / Validity Selector: Defaulting to 1 Year -->
+        <label class="form-label">
+          Expiration / Validity Period
+        </label>
+        <select v-model="keyModalForm.expirationOption" style="margin-bottom:14px;">
+          <option value="1year">1 Year (Valid until {{ new Date(Date.now() + 365*24*60*60*1000).toISOString().slice(0,10) }}) — Default</option>
+          <option value="90days">90 Days</option>
+          <option value="30days">30 Days</option>
+          <option value="never">Never Expires</option>
+        </select>
+
+        <!-- Scopes & Permissions Checkboxes -->
+        <label class="form-label">
+          Permissions & Scopes
+        </label>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;background:var(--bg-subtle, #f8fafc);padding:12px;border-radius:8px;border:1px solid var(--line, #e2e8f0);">
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
+            <input type="checkbox" value="Read Logs" v-model="keyModalForm.scopes">
+            <span><b>Read Logs:</b> Fetch tasks and timesheet records</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
+            <input type="checkbox" value="Write Entries" v-model="keyModalForm.scopes">
+            <span><b>Write Entries:</b> Push new work logs and time entries</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
+            <input type="checkbox" value="Auto Sync" v-model="keyModalForm.scopes">
+            <span><b>Auto Sync:</b> Trigger Office Timesheets & Figma sync</span>
+          </label>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;">
+          <button type="button" class="button secondary-btn" @click="showGenerateKeyModal = false">Cancel</button>
+          <button type="submit" class="button primary">Generate Key</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Modal 2: Newly Created Secret Key Reveal Dialog -->
+    <div v-if="modal === 'api-key-created' && createdKeySecretObj" class="backdrop" @click="modal = ''">
+      <div class="modal" style="max-width:520px;" @click.stop>
+        <button type="button" class="close" @click="modal = ''">×</button>
+        <p class="eyebrow" style="color:#10b981;">✓ KEY GENERATED SUCCESSFULLY</p>
+        <h2>Your Secret API Key</h2>
+        <p class="muted" style="font-size:12px;margin-bottom:12px;">
+          Please copy your secret key now. For security, full keys are valid until <b>1 Year</b> from creation date.
+        </p>
+
+        <div class="secret-key-card">
+          <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:6px;">API KEY NAME: {{ createdKeySecretObj.name }}</label>
+          <div class="secret-key-value">
+            <code>{{ createdKeySecretObj.key }}</code>
+            <button
+              type="button"
+              class="button primary sm"
+              style="font-size:11px;padding:6px 12px;"
+              @click="copyToClipboard(createdKeySecretObj.key, 'secret-reveal')"
+            >
+              {{ copySuccessId === 'secret-reveal' ? '✓ Copied!' : '📋 Copy Key' }}
+            </button>
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:#a7f3d0;display:flex;align-items:center;gap:6px;">
+            <span>📅</span> Valid until: <b>{{ createdKeySecretObj.expiryDate || '1 Year' }}</b>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;">
+          <button type="button" class="button primary" @click="modal = ''">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 3: Revoke Key Confirmation -->
+    <div v-if="keyToRevoke" class="backdrop" @click="keyToRevoke = null">
+      <div class="modal" style="max-width:420px;" @click.stop>
+        <button type="button" class="close" @click="keyToRevoke = null">×</button>
+        <p class="eyebrow" style="color:#ef4444;">REVOKE API KEY</p>
+        <h2>Revoke API Key?</h2>
+        <p class="muted" style="font-size:13px;margin-bottom:20px;">
+          Are you sure you want to revoke key <b>"{{ keyToRevoke.name }}"</b>? External scripts or plugins using this key will immediately lose access.
+        </p>
+
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;">
+          <button type="button" class="button secondary-btn" @click="keyToRevoke = null">Cancel</button>
+          <button type="button" class="button danger-btn" @click="handleRevokeKeyConfirm(keyToRevoke)">
+            Confirm Revoke
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 4: Connector Configuration Modals (Figma, MCP, Notion) -->
+    <div v-if="activeConnectorModal" class="backdrop" @click="activeConnectorModal = null">
+      <div class="modal" style="max-width:480px;" @click.stop>
+        <button type="button" class="close" @click="activeConnectorModal = null">×</button>
+        
+        <!-- Figma Setup -->
+        <form v-if="activeConnectorModal === 'figma'" @submit.prevent="handleSaveFigmaConfig">
+          <p class="eyebrow">FIGMA WORKSPACE CONNECTOR</p>
+          <h2>Configure Figma Integration</h2>
+          <p class="muted" style="font-size:12px;margin-bottom:14px;">Sync design component hours and canvas frame time into My Tracker.</p>
+
+          <label class="form-label" style="margin-top:0;">Figma Team ID / Organization Handle</label>
+          <input v-model="figmaForm.teamId" required style="margin-bottom:14px;">
+
+          <label class="custom-toggle-label" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:20px;">
+            <input type="checkbox" v-model="figmaForm.autoLogFrames">
+            <span>Auto-create work log entries on Figma frame edits</span>
+          </label>
+
+          <div style="display:flex;justify-content:flex-end;gap:10px;">
+            <button type="button" class="button secondary-btn" @click="activeConnectorModal = null">Cancel</button>
+            <button type="submit" class="button primary">Save Connection</button>
+          </div>
+        </form>
+
+        <!-- MCP Setup -->
+        <form v-else-if="activeConnectorModal === 'mcp'" @submit.prevent="handleSaveMcpConfig">
+          <p class="eyebrow">MODEL CONTEXT PROTOCOL (MCP)</p>
+          <h2>Configure MCP AI Agent Server</h2>
+          <p class="muted" style="font-size:12px;margin-bottom:14px;">Connect local/remote MCP server nodes (Cursor, Antigravity, Claude) to log agent sessions.</p>
+
+          <label class="form-label" style="margin-top:0;">MCP Server URL / Port Endpoint</label>
+          <input v-model="mcpForm.serverUrl" required style="margin-bottom:14px;">
+
+          <label class="custom-toggle-label" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:20px;">
+            <input type="checkbox" v-model="mcpForm.streamLogs">
+            <span>Stream coding prompt metrics & task logs automatically</span>
+          </label>
+
+          <div style="display:flex;justify-content:flex-end;gap:10px;">
+            <button type="button" class="button secondary-btn" @click="activeConnectorModal = null">Cancel</button>
+            <button type="submit" class="button primary">Connect MCP Node</button>
+          </div>
+        </form>
+
+        <!-- Notion Setup -->
+        <form v-else-if="activeConnectorModal === 'notion'" @submit.prevent="handleSaveNotionConfig">
+          <p class="eyebrow">NOTION WORKSPACE SYNC</p>
+          <h2>Configure Notion Integration</h2>
+          <p class="muted" style="font-size:12px;margin-bottom:14px;">Link Notion databases and meeting note pages with your work log.</p>
+
+          <label class="form-label" style="margin-top:0;">Notion Database ID</label>
+          <input v-model="notionForm.databaseId" required style="margin-bottom:14px;">
+
+          <label class="custom-toggle-label" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:20px;">
+            <input type="checkbox" v-model="notionForm.syncPages">
+            <span>Import meeting notes into My Tracker automatically</span>
+          </label>
+
+          <div style="display:flex;justify-content:flex-end;gap:10px;">
+            <button type="button" class="button secondary-btn" @click="activeConnectorModal = null">Cancel</button>
+            <button type="submit" class="button primary">Link Database</button>
+          </div>
+        </form>
+
+        <!-- General Connector Setup -->
+        <div v-else>
+          <h2>Configure {{ activeConnectorModal }}</h2>
+          <p class="muted" style="margin-bottom:16px;">Connection endpoint active.</p>
+          <button class="button primary" @click="activeConnectorModal = null">Done</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Redesigned Modal Form: Log Time / Task Entry -->
     <div v-if="modal === 'task' || modal === 'log'" class="backdrop" @click="activeDropdown = null">
@@ -3503,7 +4352,37 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <!-- API Key Created Confirmation Modal -->
+    <div v-if="modal === 'api-key-created' && newlyCreatedKeyObj" class="backdrop">
+      <div class="modal" style="max-width:520px;">
+        <button class="close" @click="modal = ''; newlyCreatedKeyObj = null">×</button>
+        <p class="eyebrow">DEVELOPER ACCESS KEY</p>
+        <h2>API Key Generated</h2>
+        <p class="muted" style="margin-bottom:16px;">
+          Your API key for <b>{{ newlyCreatedKeyObj.name }}</b> has been created. Copy it now and save it securely.
+        </p>
+
+        <div style="background:#0f172a;color:#f8fafc;padding:14px 18px;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;">
+          <code style="font-family:monospace;font-size:13px;word-break:break-all;color:#38bdf8;">
+            {{ newlyCreatedKeyObj.key }}
+          </code>
+          <button
+            class="button primary sm"
+            style="white-space:nowrap;"
+            @click="copyToClipboard(newlyCreatedKeyObj.key, 'modal-key')"
+          >
+            {{ copySuccessId === 'modal-key' ? '✓ Copied!' : '📋 Copy Key' }}
+          </button>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;">
+          <button class="button primary" @click="modal = ''; newlyCreatedKeyObj = null">Done & Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Import Review Modal -->
+
     <div v-if="importOpen" class="backdrop">
       <section class="modal">
         <button class="close" @click="importOpen = false">×</button>

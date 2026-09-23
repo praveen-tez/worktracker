@@ -3776,3 +3776,125 @@ input[type="date"], input[type="time"] {
   background: #14532d;
   color: #86efac;
 }
+
+/* ==========================================================================
+   Office Timesheets & Integrations Styling
+   ========================================================================== */
+
+.integration-featured-card {
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+
+.integration-icon-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+}
+
+.status-pill-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-pill-badge.connected {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-pill-badge.disconnected {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.status-pill-badge.blue {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.api-key-code {
+  background: #f1f5f9;
+  color: #0f172a;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.office-sync-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+}
+
+.office-sync-pill.synced {
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+}
+
+.office-sync-pill.pending {
+  background: #fef3c7;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.spin-icon {
+  display: inline-block;
+  animation: spinSlow 1s linear infinite;
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.dark .integration-featured-card {
+  background: #18243a;
+  border-color: #2a3952;
+}
+
+.dark .integration-form-grid {
+  background: #0f172a !important;
+  border-color: #1e293b !important;
+}
+
+.dark .api-key-code {
+  background: #0f172a;
+  color: #38bdf8;
+  border-color: #1e293b;
+}
+
+.dark .office-sync-pill.synced {
+  background: #0c4a6e;
+  color: #7dd3fc;
+  border-color: #0284c7;
+}
+
+.dark .office-sync-pill.pending {
+  background: #78350f;
+  color: #fde68a;
+  border-color: #d97706;
+}
+

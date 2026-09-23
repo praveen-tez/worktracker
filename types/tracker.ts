@@ -34,6 +34,42 @@ export interface LogEntry {
   startTime?: string
   endTime?: string
   tags?: string[]
+  officeSynced?: boolean
+  officeSyncId?: string
+  officeSyncTime?: string
+}
+
+export interface ApiKey {
+  id: string
+  name: string
+  key: string
+  createdDate: string
+  expiryDate?: string
+  expirationOption?: '1year' | '30days' | '90days' | 'never'
+  scopes?: string[]
+  lastUsed: string
+  status?: 'active' | 'revoked' | 'expired'
+}
+
+export interface WorkspaceConnection {
+  id: string
+  name: string
+  type: 'officetimesheets' | 'figma' | 'mcp' | 'notion' | 'github' | 'slack' | 'jira' | 'trello' | 'drive' | 'linear' | 'vscode'
+  icon: string
+  accountOrWorkspace: string
+  status: 'connected' | 'syncing' | 'disconnected' | 'error'
+  autoSync: boolean
+  lastSynced: string
+  details?: Record<string, any>
+}
+
+export interface OfficeIntegrationConfig {
+  enabled: boolean
+  endpoint: string
+  apiKey: string
+  autoSync: boolean
+  lastSynced: string | null
+  status: 'connected' | 'disconnected' | 'syncing' | 'error'
 }
 
 export interface Todo {
@@ -72,5 +108,9 @@ export interface TrackerData {
   users: string[]
   tags?: string[]
   notifications: NotificationItem[]
+  apiKeys?: ApiKey[]
+  officeIntegration?: OfficeIntegrationConfig
+  workspaceConnections?: WorkspaceConnection[]
 }
+
 

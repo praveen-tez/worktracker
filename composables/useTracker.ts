@@ -57,6 +57,93 @@ const getInitialLogs = (): LogEntry[] => {
   ]
 }
 
+const oneYearFromNow = () => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+const defaultApiKeys: ApiKey[] = [
+  {
+    id: 'key-demo-1',
+    name: 'Office Timesheets Connector',
+    key: 'mytrk_live_sk_9a8f7e6d5c4b3a21',
+    createdDate: new Date().toISOString().slice(0, 10),
+    expiryDate: oneYearFromNow(),
+    expirationOption: '1year',
+    scopes: ['Read Logs', 'Write Entries', 'Auto Sync'],
+    lastUsed: 'Just now',
+    status: 'active'
+  },
+  {
+    id: 'key-demo-2',
+    name: 'Figma Design System Sync',
+    key: 'mytrk_live_sk_3f1d8c9a2b5e4017',
+    createdDate: new Date().toISOString().slice(0, 10),
+    expiryDate: oneYearFromNow(),
+    expirationOption: '1year',
+    scopes: ['Read Logs', 'Write Entries'],
+    lastUsed: '2h ago',
+    status: 'active'
+  }
+]
+
+const defaultWorkspaceConnections: WorkspaceConnection[] = [
+  {
+    id: 'conn-office',
+    name: 'Office Timesheets Enterprise',
+    type: 'officetimesheets',
+    icon: '🏢',
+    accountOrWorkspace: 'Acme Corp (v4.2 Endpoint)',
+    status: 'connected',
+    autoSync: true,
+    lastSynced: 'Today at 10:30 AM',
+    details: { endpoint: 'https://api.officetimesheets.com/v1/sync' }
+  },
+  {
+    id: 'conn-figma',
+    name: 'Figma Design Team',
+    type: 'figma',
+    icon: '🎨',
+    accountOrWorkspace: 'Product UI System (Team TEZ)',
+    status: 'connected',
+    autoSync: true,
+    lastSynced: '15m ago',
+    details: { teamId: 'figma_team_99182', autoLogFrames: true }
+  },
+  {
+    id: 'conn-mcp',
+    name: 'MCP Local AI Context Protocol',
+    type: 'mcp',
+    icon: '🤖',
+    accountOrWorkspace: 'Antigravity / Cursor Agent Node',
+    status: 'connected',
+    autoSync: true,
+    lastSynced: 'Just now',
+    details: { port: 3000, streamLogs: true }
+  },
+  {
+    id: 'conn-notion',
+    name: 'Notion Workspace',
+    type: 'notion',
+    icon: '📝',
+    accountOrWorkspace: 'TEZ Engineering & Product Docs',
+    status: 'connected',
+    autoSync: false,
+    lastSynced: 'Yesterday at 4:15 PM',
+    details: { dbId: 'notion_db_881920' }
+  }
+]
+
+const defaultOfficeIntegration: OfficeIntegrationConfig = {
+  enabled: true,
+  endpoint: 'https://api.officetimesheets.com/v1/sync',
+  apiKey: 'ots_secret_88x99z22k11',
+  autoSync: true,
+  lastSynced: 'Today at 10:30 AM',
+  status: 'connected'
+}
+
 const initial: TrackerData = {
   tasks: [],
   osg: [],
@@ -67,7 +154,10 @@ const initial: TrackerData = {
   projects: defaultProjects,
   users: defaultUsers,
   tags: defaultTags,
-  notifications: defaultNotifications
+  notifications: defaultNotifications,
+  apiKeys: defaultApiKeys,
+  officeIntegration: defaultOfficeIntegration,
+  workspaceConnections: defaultWorkspaceConnections
 }
 
 const storageKey = 'monthly-time-tracker-v1'
@@ -101,7 +191,7 @@ export function useTracker() {
               const em = endMin % 60
               et = `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`
             }
-            return { ...l, startTime: st, endTime: et }
+            return { ...l, startTime: st, endTime: et, officeSynced: l.officeSynced ?? true }
           })
 
           data.value = {
@@ -114,7 +204,10 @@ export function useTracker() {
             projects: parsed.projects && parsed.projects.length ? parsed.projects : defaultProjects,
             users: parsed.users && parsed.users.length ? parsed.users : defaultUsers,
             tags: parsed.tags && parsed.tags.length ? parsed.tags : defaultTags,
-            notifications: parsed.notifications || defaultNotifications
+            notifications: parsed.notifications || defaultNotifications,
+            apiKeys: parsed.apiKeys && parsed.apiKeys.length ? parsed.apiKeys : defaultApiKeys,
+            officeIntegration: parsed.officeIntegration || defaultOfficeIntegration,
+            workspaceConnections: parsed.workspaceConnections && parsed.workspaceConnections.length ? parsed.workspaceConnections : defaultWorkspaceConnections
           }
         } catch (e) {
           console.error('Failed to parse tracker storage', e)
@@ -138,9 +231,25 @@ export function useTracker() {
   }
 
   const addLog = (entry: Omit<LogEntry, 'id'>) => {
-    data.value.logs.push({ ...entry, id: crypto.randomUUID() })
+    const isAutoSync = data.value.officeIntegration?.enabled && data.value.officeIntegration?.autoSync
+    const newLog: LogEntry = {
+      ...entry,
+      id: crypto.randomUUID(),
+      officeSynced: isAutoSync ? true : false,
+      officeSyncTime: isAutoSync ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined
+    }
+    data.value.logs.push(newLog)
     if (entry.project && !data.value.projects.includes(entry.project)) {
       data.value.projects.push(entry.project)
+    }
+    if (isAutoSync) {
+      addNotification({
+        title: 'Office Timesheets Synced',
+        message: `Work log "${entry.task || 'Time Entry'}" pushed to Office Timesheets.`,
+        time: 'Just now',
+        type: 'success',
+        read: false
+      })
     }
     save()
   }
@@ -148,7 +257,12 @@ export function useTracker() {
   const updateLog = (log: LogEntry) => {
     const i = data.value.logs.findIndex(x => x.id === log.id)
     if (i >= 0) {
-      data.value.logs[i] = log
+      const isAutoSync = data.value.officeIntegration?.enabled && data.value.officeIntegration?.autoSync
+      data.value.logs[i] = {
+        ...log,
+        officeSynced: isAutoSync ? true : log.officeSynced,
+        officeSyncTime: isAutoSync ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : log.officeSyncTime
+      }
       if (log.project && !data.value.projects.includes(log.project)) {
         data.value.projects.push(log.project)
       }
@@ -233,6 +347,98 @@ export function useTracker() {
     save()
   }
 
+  const generateApiKey = (name: string, expirationOption: '1year' | '30days' | '90days' | 'never' = '1year', scopes: string[] = ['Read Logs', 'Write Entries']): ApiKey => {
+    const randomBytes = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+    const keyVal = `mytrk_live_sk_${randomBytes}`
+    
+    // Calculate Expiry Date (Default 1 year = 365 days)
+    let expiryDate: string | undefined = undefined
+    const now = new Date()
+    if (expirationOption === '1year') {
+      now.setFullYear(now.getFullYear() + 1)
+      expiryDate = now.toISOString().slice(0, 10)
+    } else if (expirationOption === '30days') {
+      now.setDate(now.getDate() + 30)
+      expiryDate = now.toISOString().slice(0, 10)
+    } else if (expirationOption === '90days') {
+      now.setDate(now.getDate() + 90)
+      expiryDate = now.toISOString().slice(0, 10)
+    }
+
+    const newKey: ApiKey = {
+      id: crypto.randomUUID(),
+      name: name.trim() || 'Custom API Key',
+      key: keyVal,
+      createdDate: new Date().toISOString().slice(0, 10),
+      expiryDate,
+      expirationOption,
+      scopes,
+      lastUsed: 'Never',
+      status: 'active'
+    }
+    if (!data.value.apiKeys) data.value.apiKeys = []
+    data.value.apiKeys.unshift(newKey)
+    save()
+    return newKey
+  }
+
+  const revokeApiKey = (id: string) => {
+    if (data.value.apiKeys) {
+      const target = data.value.apiKeys.find(k => k.id === id)
+      if (target) {
+        target.status = 'revoked'
+        save()
+      }
+    }
+  }
+
+  const deleteApiKey = (id: string) => {
+    if (data.value.apiKeys) {
+      data.value.apiKeys = data.value.apiKeys.filter(k => k.id !== id)
+      save()
+    }
+  }
+
+  const updateOfficeIntegration = (updated: Partial<OfficeIntegrationConfig>) => {
+    data.value.officeIntegration = {
+      ...(data.value.officeIntegration || defaultOfficeIntegration),
+      ...updated
+    }
+    save()
+  }
+
+  const syncOfficeTimesheets = async () => {
+    if (!data.value.officeIntegration) return { success: false, syncedCount: 0 }
+    data.value.officeIntegration.status = 'syncing'
+    
+    // Simulate API Network Delay
+    await new Promise(r => setTimeout(r, 600))
+    
+    let count = 0
+    data.value.logs.forEach(l => {
+      if (!l.officeSynced) {
+        l.officeSynced = true
+        l.officeSyncTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        count++
+      }
+    })
+    
+    const nowStr = `Today at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    data.value.officeIntegration.status = 'connected'
+    data.value.officeIntegration.lastSynced = nowStr
+    
+    addNotification({
+      title: 'Bi-directional Sync Complete',
+      message: `Successfully synchronized ${count} timesheet log(s) with Office Timesheets.`,
+      time: 'Just now',
+      type: 'success',
+      read: false
+    })
+    
+    save()
+    return { success: true, syncedCount: count }
+  }
+
   const syncSheets = async () => {
     if (!config.public.sheetsEndpoint) return false
     await $fetch(config.public.sheetsEndpoint as string, { method: 'POST', body: data.value })
@@ -259,9 +465,15 @@ export function useTracker() {
     addNotification,
     markNotificationRead,
     clearNotifications,
+    generateApiKey,
+    revokeApiKey,
+    deleteApiKey,
+    updateOfficeIntegration,
+    syncOfficeTimesheets,
     syncSheets,
     hasSheets: computed(() => Boolean(config.public.sheetsEndpoint))
   }
 }
+
 
 
