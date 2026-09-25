@@ -1,24 +1,277 @@
 <script setup lang="ts">
-import type { TaskStatus, Priority, Todo, LogEntry, Task } from '~/types/tracker'
+import type { TaskStatus, Priority, Todo, LogEntry, Task, WorkspaceConnection, ApiKey } from '~/types/tracker'
 
 const tracker = useTracker()
 const {
   data, load, addTask, updateTask, addLog, updateLog, removeLog, addProject, removeProject,
   addUser, removeUser, addTag, removeTag: deleteTagFromTracker,
   save, addNotification, markNotificationRead, clearNotifications,
-  generateApiKey, revokeApiKey, updateOfficeIntegration, syncOfficeTimesheets
+  generateApiKey, revokeApiKey, deleteApiKey, updateOfficeIntegration, syncOfficeTimesheets,
+  connectWorkspace, disconnectWorkspace, syncWorkspaceConnection
 } = tracker
 
 /* --- Integrations & Office Timesheets State --- */
 const isTestingConnection = ref(false)
 const isSyncingOffice = ref(false)
-const showOfficeApiKey = ref(false)
-const newApiKeyName = ref('')
-const newlyCreatedKeyObj = ref<any>(null)
+const syncingConnectionId = ref<string | null>(null)
 const copySuccessId = ref<string | null>(null)
 
 /* --- Integration Sub-Tabs State --- */
-const activeIntegrationTab = ref<'workspaces' | 'catalog' | 'developer_api'>('workspaces')
+const activeIntegrationTab = ref<'workspaces' | 'developer_api' | 'available'>('workspaces')
+
+/* --- Master Integrations Catalog --- */
+interface MasterIntegrationItem {
+  id: string
+  name: string
+  type: string
+  icon: string
+  category: string
+  desc: string
+  redirectUrl: string
+  keyLabel: string
+  keyPlaceholder: string
+  secondaryLabel?: string
+  secondaryPlaceholder?: string
+  defaultSecondary?: string
+}
+
+const MASTER_INTEGRATIONS_CATALOG: MasterIntegrationItem[] = [
+  {
+    id: 'officetimesheets',
+    name: 'Q Timesheets',
+    type: 'officetimesheets',
+    icon: '/icons/q-timesheets.png',
+    category: 'Timesheets Sync',
+    desc: 'Sync daily work logs and timesheets with Q Timesheets portal.',
+    redirectUrl: 'https://timesheets.quantana.top/user/profile',
+    keyLabel: 'API Secret Key',
+    keyPlaceholder: 'Enter Q Timesheets API secret key...',
+    secondaryLabel: 'Portal URL',
+    secondaryPlaceholder: 'https://timesheets.quantana.top/user/profile',
+    defaultSecondary: 'https://timesheets.quantana.top/user/profile'
+  },
+  {
+    id: 'figma',
+    name: 'Figma Design Team',
+    type: 'figma',
+    icon: '🎨',
+    category: 'Design & UI',
+    desc: 'Track canvas frame editing hours and sync UI/UX design components with timesheet logs.',
+    redirectUrl: 'https://help.figma.com/hc/en-us/articles/8085703771159-Manage-personal-access-tokens',
+    keyLabel: 'Personal Access Token (PAT)',
+    keyPlaceholder: 'figd_xxxx...',
+    secondaryLabel: 'Figma Team ID / Handle',
+    secondaryPlaceholder: 'e.g. team_tez_99182',
+    defaultSecondary: 'team_tez_99182'
+  },
+  {
+    id: 'mcp',
+    name: 'Model Context Protocol (MCP)',
+    type: 'mcp',
+    icon: '🤖',
+    category: 'AI & Automation',
+    desc: 'Stream AI coding sessions, agent prompt tokens, and context telemetry from IDE agents.',
+    redirectUrl: 'https://modelcontextprotocol.io/',
+    keyLabel: 'MCP Bearer Auth Token',
+    keyPlaceholder: 'mcp_live_token...',
+    secondaryLabel: 'MCP Server Endpoint / URL',
+    secondaryPlaceholder: 'http://localhost:3000/mcp',
+    defaultSecondary: 'http://localhost:3000/mcp'
+  },
+  {
+    id: 'notion',
+    name: 'Notion Workspace',
+    type: 'notion',
+    icon: '📝',
+    category: 'Docs & Notes',
+    desc: 'Import meeting notes, PRDs, and database tasks into your daily time tracker.',
+    redirectUrl: 'https://www.notion.so/my-integrations',
+    keyLabel: 'Internal Integration Secret',
+    keyPlaceholder: 'secret_xxxx...',
+    secondaryLabel: 'Notion Database ID',
+    secondaryPlaceholder: 'e.g. notion_db_881920',
+    defaultSecondary: 'notion_db_881920'
+  },
+  {
+    id: 'github',
+    name: 'GitHub Org',
+    type: 'github',
+    icon: '🐙',
+    category: 'Development',
+    desc: 'Auto-generate work log entries on PR reviews, commits, and closed issues.',
+    redirectUrl: 'https://github.com/settings/tokens',
+    keyLabel: 'Personal Access Token (PAT)',
+    keyPlaceholder: 'ghp_xxxx or github_pat_xxxx...',
+    secondaryLabel: 'GitHub Org / Repository',
+    secondaryPlaceholder: 'e.g. acme-corp/worktracker',
+    defaultSecondary: 'tez-workspace/main-repo'
+  },
+  {
+    id: 'slack',
+    name: 'Slack Workspace',
+    type: 'slack',
+    icon: '💬',
+    category: 'Communication',
+    desc: 'Use /log-work bot commands and channel check-ins to record time entries.',
+    redirectUrl: 'https://api.slack.com/apps',
+    keyLabel: 'Bot User OAuth Token',
+    keyPlaceholder: 'xoxb-xxxx...',
+    secondaryLabel: 'Channel or Team ID',
+    secondaryPlaceholder: 'e.g. #general or T01234567',
+    defaultSecondary: '#general'
+  },
+  {
+    id: 'jira',
+    name: 'Jira Software',
+    type: 'jira',
+    icon: '🎯',
+    category: 'Project Management',
+    desc: 'Sync sprint tasks, issue status changes, and logged hours with Jira Cloud.',
+    redirectUrl: 'https://id.atlassian.com/manage-profile/security/api-tokens',
+    keyLabel: 'Atlassian API Token',
+    keyPlaceholder: 'ATATT3xFfGF0...',
+    secondaryLabel: 'Jira Cloud Domain URL',
+    secondaryPlaceholder: 'https://your-company.atlassian.net',
+    defaultSecondary: 'https://acme.atlassian.net'
+  },
+  {
+    id: 'drive',
+    name: 'Google Drive & Sheets',
+    type: 'drive',
+    icon: '📁',
+    category: 'Cloud Storage',
+    desc: 'Export time logs to Google Sheets spreadsheets or link Google Docs deliverables.',
+    redirectUrl: 'https://console.cloud.google.com/apis/credentials',
+    keyLabel: 'Google Service API Key',
+    keyPlaceholder: 'AIzaSyxxxx...',
+    secondaryLabel: 'Google Sheet / Folder ID',
+    secondaryPlaceholder: 'e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+    defaultSecondary: 'My Work Logs Drive Folder'
+  },
+  {
+    id: 'linear',
+    name: 'Linear App',
+    type: 'linear',
+    icon: '⚡',
+    category: 'Issue Tracking',
+    desc: 'Sync Linear cycles, issues, and PR links with your time tracking workspace.',
+    redirectUrl: 'https://linear.app/settings/api',
+    keyLabel: 'Linear Personal API Key',
+    keyPlaceholder: 'lin_api_xxxx...',
+    secondaryLabel: 'Linear Team Key',
+    secondaryPlaceholder: 'e.g. ENG or PRODUCT',
+    defaultSecondary: 'ENG'
+  },
+  {
+    id: 'vscode',
+    name: 'VS Code Extension',
+    type: 'vscode',
+    icon: '💻',
+    category: 'IDE Tooling',
+    desc: 'Track active coding time per project file with status bar timer widget.',
+    redirectUrl: 'https://marketplace.visualstudio.com/',
+    keyLabel: 'Extension Sync Token',
+    keyPlaceholder: 'vsc_token_xxxx...',
+    secondaryLabel: 'Local Agent Bridge URL',
+    secondaryPlaceholder: 'http://localhost:54321',
+    defaultSecondary: 'http://localhost:54321'
+  },
+  {
+    id: 'trello',
+    name: 'Trello Boards',
+    type: 'trello',
+    icon: '📋',
+    category: 'Kanban Boards',
+    desc: 'Sync board cards, checklists, and due dates with to-dos and logs.',
+    redirectUrl: 'https://trello.com/power-ups/admin',
+    keyLabel: 'Trello Developer API Key',
+    keyPlaceholder: 'Enter Trello API Key...',
+    secondaryLabel: 'Default Board Name / ID',
+    secondaryPlaceholder: 'e.g. Sprint Tasks Board',
+    defaultSecondary: 'Active Sprint Board'
+  },
+  {
+    id: 'google_calendar',
+    name: 'Google Calendar',
+    type: 'google_calendar',
+    icon: '📅',
+    category: 'Calendar & Scheduling',
+    desc: 'Sync calendar events and meetings as time log entries. Auto-import events as tracked hours.',
+    redirectUrl: 'https://calendar.google.com/calendar/r/settings',
+    keyLabel: 'Google API Key / OAuth Token',
+    keyPlaceholder: 'AIzaSy... or ya29...',
+    secondaryLabel: 'Calendar ID (optional)',
+    secondaryPlaceholder: 'primary or email@gmail.com',
+    defaultSecondary: 'primary'
+  }
+]
+
+const toolSvgIcons: Record<string, string> = {
+  figma: `<svg width="20" height="20" viewBox="0 0 38 57" fill="none"><path d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/><path d="M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z" fill="#0ACF83"/><path d="M19 0V19H28.5C33.7467 19 38 14.7467 38 9.5C38 4.25329 33.7467 0 28.5 0H19Z" fill="#FF7262"/><path d="M0 9.5C0 14.7467 4.25329 19 9.5 19H19V0H9.5C4.25329 0 0 4.25329 0 9.5Z" fill="#F24E1E"/><path d="M0 28.5C0 33.7467 4.25329 38 9.5 38H19V19H9.5C4.25329 19 0 23.2533 0 28.5Z" fill="#A259FF"/></svg>`,
+  mcp: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="5" fill="#D97706"/><path d="M6.5 17L12 7L17.5 17M8 14H16" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  notion: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#000000"><path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.373L18.678 2.2c-.373-.374-.933-.7-2.053-.607L3.992 2.666c-.607.047-.747.42-.467.747l.934.795zm.747 3.313v13.626c0 .84.42 1.12 1.307 1.073l14.288-.84c.887-.046.98-.653.98-1.306V6.727c0-.653-.28-.98-.84-.933l-14.894.886c-.56.047-.84.373-.84.841zm12.935.56l.094 10.312c0 .327-.14.467-.42.467l-2.007.094c-.28 0-.42-.14-.42-.467l-.047-5.926-4.06 6.3c-.187.28-.42.373-.7.373l-1.96.094c-.327 0-.467-.187-.467-.513V8.828c0-.374.14-.514.467-.514l2.147-.14c.327 0 .467.14.467.467l.047 5.786 3.92-6.16c.187-.28.42-.374.7-.374l1.867-.093c.28 0 .42.14.42.467z"/></svg>`,
+  github: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#24292e"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>`,
+  slack: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z" fill="#E01E5A"/><path d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z" fill="#36C5F0"/><path d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z" fill="#2EB67D"/><path d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" fill="#ECB22E"/></svg>`,
+  jira: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M11.53 2c0 2.4-1.97 4.35-4.4 4.35H3.6V2h7.93zm0 5.82c0 2.4-1.97 4.36-4.4 4.36H3.6V7.82h7.93zm0 5.82c0 2.4-1.97 4.36-4.4 4.36H3.6v-4.36h7.93zm8.87 0c0 2.4-1.97 4.36-4.4 4.36H12.4v-4.36h8z" fill="#0052CC"/></svg>`,
+  drive: `<svg width="20" height="20" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>`,
+  linear: `<svg width="20" height="20" viewBox="0 0 100 100" fill="none"><path d="M50 0C22.3858 0 0 22.3858 0 50C0 77.6142 22.3858 100 50 100C77.6142 100 100 77.6142 100 50C100 22.3858 77.6142 0 50 0ZM11.1444 48.069C11.5204 38.6416 15.2818 29.832 21.6566 23.1118L76.8882 78.3434C70.168 84.7182 61.3584 88.4796 51.931 88.8556L11.1444 48.069ZM88.8556 51.931C88.4796 61.3584 84.7182 70.168 78.3434 76.8882L23.1118 21.6566C29.832 15.2818 38.6416 11.5204 48.069 11.1444L88.8556 51.931Z" fill="#5E6AD2"/></svg>`,
+  vscode: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.276A1 1 0 0 0 .326 8.7l3.69 3.3-3.69 3.3a1 1 0 0 0-.001 1.424l1.322 1.217a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.94-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z" fill="#007ACC"/></svg>`,
+  trello: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#0079BF"><rect width="24" height="24" rx="4"/><rect x="3.5" y="3.5" width="6.5" height="13" rx="1.5" fill="#FFFFFF"/><rect x="14" y="3.5" width="6.5" height="8" rx="1.5" fill="#FFFFFF"/></svg>`,
+  google_calendar: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="3" fill="#fff"/><path d="M17.5 2H15V0h-2v2H11V0H9v2H6.5A2.5 2.5 0 004 4.5v15A2.5 2.5 0 006.5 22h11a2.5 2.5 0 002.5-2.5v-15A2.5 2.5 0 0017.5 2zM18 19.5a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5V9h12v10.5z" fill="#4285F4"/><rect x="6" y="11" width="3" height="3" rx="0.5" fill="#EA4335"/><rect x="10.5" y="11" width="3" height="3" rx="0.5" fill="#FBBC04"/><rect x="15" y="11" width="3" height="3" rx="0.5" fill="#34A853"/><rect x="6" y="15" width="3" height="3" rx="0.5" fill="#34A853"/><rect x="10.5" y="15" width="3" height="3" rx="0.5" fill="#EA4335"/></svg>`,
+  custom: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="5" fill="#6366F1"/><path d="M13 3L4 14H12L11 21L20 10H12L13 3Z" fill="#FFFFFF"/></svg>`
+}
+
+const getToolTypeFromKey = (k: ApiKey) => {
+  const lower = (k.name + ' ' + k.id).toLowerCase()
+  if (lower.includes('office') || lower.includes('timesheet') || lower.includes('quantana') || lower.includes('q time')) return 'officetimesheets'
+  if (lower.includes('figma')) return 'figma'
+  if (lower.includes('github')) return 'github'
+  if (lower.includes('slack')) return 'slack'
+  if (lower.includes('jira')) return 'jira'
+  if (lower.includes('notion')) return 'notion'
+  if (lower.includes('drive')) return 'drive'
+  if (lower.includes('linear')) return 'linear'
+  if (lower.includes('vscode')) return 'vscode'
+  if (lower.includes('trello')) return 'trello'
+  if (lower.includes('mcp')) return 'mcp'
+  if (lower.includes('google') || lower.includes('calendar') || lower.includes('gcal')) return 'google_calendar'
+  return 'custom'
+}
+
+const getAvatarGradient = (name?: string) => {
+  const char = (name || 'A').trim().charAt(0).toUpperCase() || 'A'
+  const c = char.charCodeAt(0)
+  const hues = [
+    'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    'linear-gradient(135deg, #0ea5e9, #2563eb)',
+    'linear-gradient(135deg, #10b981, #059669)',
+    'linear-gradient(135deg, #f59e0b, #d97706)',
+    'linear-gradient(135deg, #ec4899, #d946ef)',
+    'linear-gradient(135deg, #8b5cf6, #ec4899)',
+    'linear-gradient(135deg, #14b8a6, #0284c7)',
+    'linear-gradient(135deg, #f43f5e, #be123c)'
+  ]
+  return hues[c % hues.length]
+}
+
+const getAvatarLetter = (name?: string) => {
+  const clean = (name || '').trim()
+  return clean ? clean.charAt(0).toUpperCase() : '⚡'
+}
+
+/* --- Reactive Available Integrations Filter --- */
+const availableIntegrationsList = computed(() => {
+  const activeTypes = new Set((data.value.workspaceConnections || []).map(c => c.type))
+  return MASTER_INTEGRATIONS_CATALOG.filter(item => !activeTypes.has(item.type))
+})
+
+/* --- View & Display Toggle States --- */
+const availableViewMode = ref<'grid' | 'list'>('grid')
+const toggledKeyDisplay = ref<Record<string, boolean>>({})
+const toggleKeyDisplay = (id: string) => {
+  toggledKeyDisplay.value[id] = !toggledKeyDisplay.value[id]
+}
+const isKeyToggled = (id: string) => !!toggledKeyDisplay.value[id]
 
 /* --- API Key Management Form & Modal State --- */
 const showGenerateKeyModal = ref(false)
@@ -58,60 +311,186 @@ const handleRevokeKeyConfirm = (keyObj: ApiKey) => {
   notice(`API key "${keyObj.name}" has been revoked.`)
 }
 
-/* --- Connector Modals State --- */
-const activeConnectorModal = ref<string | null>(null)
-const figmaForm = ref({ teamId: 'figma_team_99182', autoLogFrames: true })
-const mcpForm = ref({ serverUrl: 'http://localhost:3000/mcp', streamLogs: true })
-const notionForm = ref({ databaseId: 'notion_db_881920', syncPages: true })
-
-const handleSaveFigmaConfig = () => {
-  activeConnectorModal.value = null
-  notice('Figma Design Team workspace connected successfully!')
+/* --- API Key Deletion Confirmation State --- */
+const keyToDelete = ref<ApiKey | null>(null)
+const handleDeleteKeyConfirm = () => {
+  if (!keyToDelete.value) return
+  const deletedName = keyToDelete.value.name
+  deleteApiKey(keyToDelete.value.id)
+  keyToDelete.value = null
+  notice(`API key "${deletedName}" has been deleted.`)
 }
 
-const handleSaveMcpConfig = () => {
-  activeConnectorModal.value = null
-  notice('MCP AI Context Agent Node connected & streaming!')
-}
-
-const handleSaveNotionConfig = () => {
-  activeConnectorModal.value = null
-  notice('Notion Workspace database linked successfully!')
-}
-
-const officeForm = ref({
-  endpoint: data.value.officeIntegration?.endpoint || 'https://api.officetimesheets.com/v1/sync',
-  apiKey: data.value.officeIntegration?.apiKey || 'ots_secret_88x99z22k11',
-  autoSync: data.value.officeIntegration?.autoSync ?? true,
-  enabled: data.value.officeIntegration?.enabled ?? true
+/* --- Connection & Configuration Modal State --- */
+const isCustomConnection = ref(false)
+const showConnectionModal = ref(false)
+const selectedIntegration = ref<MasterIntegrationItem | null>(null)
+const editingConnectionId = ref<string | null>(null)
+const connectionForm = ref({
+  customName: '',
+  apiKey: '',
+  showApiKey: false
 })
 
-const handleSaveOfficeSettings = () => {
-  updateOfficeIntegration({
-    endpoint: officeForm.value.endpoint,
-    apiKey: officeForm.value.apiKey,
-    autoSync: officeForm.value.autoSync,
-    enabled: officeForm.value.enabled,
-    status: 'connected'
-  })
-  notice('Office Timesheets settings saved successfully')
+const openAddApiKeyModal = () => {
+  editingConnectionId.value = null
+  isCustomConnection.value = true
+  selectedIntegration.value = null
+  connectionForm.value = {
+    customName: '',
+    apiKey: '',
+    showApiKey: false
+  }
+  showConnectionModal.value = true
+}
+
+const openConnectIntegrationModal = (tool: MasterIntegrationItem) => {
+  // Google Calendar uses OAuth — redirect directly, no API key modal needed
+  if (tool.type === 'google_calendar') {
+    window.location.href = '/api/auth/google/redirect'
+    return
+  }
+  isCustomConnection.value = false
+  selectedIntegration.value = tool
+  editingConnectionId.value = null
+  connectionForm.value = {
+    customName: tool.name,
+    apiKey: '',
+    showApiKey: false
+  }
+  showConnectionModal.value = true
+}
+
+const openCustomConnectionModal = () => {
+  openAddApiKeyModal()
+}
+
+const openConfigureConnectionModal = (conn: WorkspaceConnection) => {
+  const master = MASTER_INTEGRATIONS_CATALOG.find(m => m.type === conn.type)
+  isCustomConnection.value = !master || conn.type.startsWith('custom')
+  selectedIntegration.value = master || {
+    id: conn.type,
+    name: conn.name,
+    type: conn.type,
+    icon: conn.icon || '⚡',
+    category: 'Custom API',
+    desc: 'Custom connected workspace endpoint.',
+    redirectUrl: '',
+    keyLabel: 'API Key / Secret Token',
+    keyPlaceholder: 'Enter API Key...',
+    secondaryLabel: '',
+    secondaryPlaceholder: ''
+  }
+  editingConnectionId.value = conn.id
+  connectionForm.value = {
+    customName: conn.name,
+    apiKey: conn.details?.apiKey || '',
+    showApiKey: false
+  }
+  showConnectionModal.value = true
 }
 
 const handleTestConnection = async () => {
+  if (!connectionForm.value.apiKey.trim()) {
+    notice('⚠️ Please enter an API key first to test connection.')
+    return
+  }
   isTestingConnection.value = true
-  await new Promise(r => setTimeout(r, 700))
-  isTestingConnection.value = false
-  updateOfficeIntegration({ status: 'connected' })
-  notice('✓ Office Timesheets API connection verified successfully!')
+
+  const integType = selectedIntegration.value?.type
+
+  try {
+    if (integType === 'officetimesheets') {
+      // Real test against Q Timesheets API
+      const result = await $fetch<{ success: boolean; user: { name: string; email: string }; organization: { name: string } }>(
+        '/api/qtimesheets/test',
+        { method: 'POST', body: { token: connectionForm.value.apiKey.trim() } }
+      )
+      notice(`✅ Connected as ${result.user.name} (${result.organization.name})`)
+    } else {
+      // Generic simulated test for other integrations
+      await new Promise(r => setTimeout(r, 700))
+      const targetName = isCustomConnection.value
+        ? (connectionForm.value.customName.trim() || 'Custom API Tool')
+        : (selectedIntegration.value?.name || 'integration')
+      notice(`✓ Connection verified successfully for ${targetName}!`)
+    }
+  } catch (e: any) {
+    notice(`❌ ${e?.data?.message || e?.message || 'Connection test failed. Check your token.'}`)
+  } finally {
+    isTestingConnection.value = false
+  }
 }
 
-const handleManualSyncOffice = async () => {
-  isSyncingOffice.value = true
-  const res = await syncOfficeTimesheets()
-  isSyncingOffice.value = false
-  if (res.success) {
-    notice(`Synced ${res.syncedCount} entry/entries with Office Timesheets!`)
+const handleSaveConnection = () => {
+  if (!connectionForm.value.apiKey.trim()) {
+    notice('⚠️ Please enter an API key to complete connection.')
+    return
   }
+
+  const isCustom = isCustomConnection.value
+  const name = isCustom
+    ? (connectionForm.value.customName.trim() || 'Custom API Tool')
+    : (selectedIntegration.value?.name || 'Integration')
+  
+  const type = isCustom
+    ? ('custom-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
+    : (selectedIntegration.value?.type || 'custom')
+
+  const icon = isCustom
+    ? '⚡'
+    : (selectedIntegration.value?.icon || '🔗')
+
+  const connId = editingConnectionId.value || `conn-${type}-${Date.now()}`
+
+  const newConn: WorkspaceConnection = {
+    id: connId,
+    name: name,
+    type: type,
+    icon: icon,
+    accountOrWorkspace: `${name} API`,
+    status: 'connected',
+    autoSync: true,
+    lastSynced: 'Just now',
+    details: {
+      apiKey: connectionForm.value.apiKey
+    }
+  }
+
+  connectWorkspace(newConn)
+  showConnectionModal.value = false
+  notice(`✓ ${name} connected to Active Workspaces!`)
+}
+
+const handleRemoveActiveConnection = (conn: WorkspaceConnection) => {
+  if (confirm(`Disconnect and remove ${conn.name}? It will return to Available Integrations.`)) {
+    disconnectWorkspace(conn.id)
+    notice(`Removed ${conn.name} from active connections.`)
+  }
+}
+
+const handleDisconnectFromModal = () => {
+  if (editingConnectionId.value) {
+    disconnectWorkspace(editingConnectionId.value)
+    showConnectionModal.value = false
+    notice(`Disconnected ${selectedIntegration.value?.name || 'integration'}.`)
+  }
+}
+
+const handleSyncConnection = async (conn: WorkspaceConnection) => {
+  syncingConnectionId.value = conn.id
+  if (conn.type === 'officetimesheets') {
+    isSyncingOffice.value = true
+    const res = await syncOfficeTimesheets()
+    isSyncingOffice.value = false
+    if (res.success) {
+      notice(`Synced ${res.syncedCount} entry/entries with Office Timesheets!`)
+    }
+  } else {
+    await syncWorkspaceConnection(conn.id)
+    notice(`Synced ${conn.name} workspace!`)
+  }
+  syncingConnectionId.value = null
 }
 
 const handleGenerateApiKey = () => {
@@ -1921,6 +2300,58 @@ onMounted(() => {
   load()
   if (import.meta.client) {
     window.addEventListener('click', closeAllPopovers)
+
+    // ── Handle Google OAuth callback ──────────────────────────────────────
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('google_connected') === '1') {
+      const rawData = urlParams.get('gdata')
+      if (rawData) {
+        try {
+          const gdata = JSON.parse(decodeURIComponent(rawData))
+          // Auto-create the Google Calendar workspace connection
+          const gcalConn = {
+            id: `conn-google_calendar-${Date.now()}`,
+            name: `Google Calendar (${gdata.email})`,
+            type: 'google_calendar',
+            icon: '📅',
+            accountOrWorkspace: gdata.email,
+            status: 'connected' as const,
+            autoSync: true,
+            lastSynced: 'Just now',
+            details: {
+              apiKey: gdata.accessToken,
+              refreshToken: gdata.refreshToken,
+              email: gdata.email,
+              name: gdata.name,
+              picture: gdata.picture,
+              expiresAt: gdata.expiresAt
+            }
+          }
+          connectWorkspace(gcalConn)
+          page.value = 'integrations'
+          activeIntegrationTab.value = 'workspaces'
+          addNotification({
+            title: '✅ Google Calendar Connected',
+            message: `Connected as ${gdata.name} (${gdata.email})`,
+            time: 'Just now',
+            type: 'success',
+            read: false
+          })
+        } catch (e) {
+          notice('Google Calendar connected but failed to save. Please try again.')
+        }
+      }
+      // Clean URL
+      window.history.replaceState({}, '', '/')
+    } else if (urlParams.get('google_error')) {
+      notice('❌ Google Calendar connection was cancelled or failed.')
+      window.history.replaceState({}, '', '/')
+    }
+
+    // Navigate to integrations if redirected back from OAuth
+    if (urlParams.get('page') === 'integrations') {
+      page.value = 'integrations'
+    }
   }
 })
 
@@ -2111,10 +2542,6 @@ onBeforeUnmount(() => {
             </div>
             
             <div style="display:flex;align-items:center;gap:12px;">
-              <!-- Quick Add Log Button in Overview -->
-              <button class="button primary" style="display:flex;align-items:center;gap:6px;" @click="modal = 'task'">
-                ＋ Add log
-              </button>
 
               <!-- Month Selector with Calendar Icon & Quick Picker Popover -->
               <div class="month-select">
@@ -2157,7 +2584,7 @@ onBeforeUnmount(() => {
                 <h2>{{ monthTasks[0]?.task || 'Complete project deliverable' }}</h2>
                 <p class="muted">Keep the momentum moving.</p>
               </div>
-              <button class="circle-arrow" @click="modal = 'task'">↗</button>
+              <button class="circle-arrow" @click="page = 'logs'">↗</button>
             </article>
 
             <div class="stat-card">
@@ -2451,49 +2878,37 @@ onBeforeUnmount(() => {
                 <span>{{ selectedLogIds.length > 0 ? `Export (${selectedLogIds.length})` : 'Export' }}</span>
               </button>
 
-              <!-- Office Timesheets Bi-Directional Sync Action Button -->
+              <!-- Office Timesheets Bi-Directional Sync Action Button (Icon Only) -->
               <button
                 class="button secondary-btn"
-                style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-weight:600;"
-                :title="data.officeIntegration?.enabled ? 'Sync logs bi-directionally with Office Timesheets' : 'Office Timesheets integration inactive'"
+                style="display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;font-size:14px;"
+                :title="isSyncingOffice ? 'Syncing with Office Timesheets...' : 'Sync with Office Timesheets'"
                 @click="handleManualSyncOffice"
               >
                 <span :class="{ 'spin-icon': isSyncingOffice }">🔄</span>
-                <span>{{ isSyncingOffice ? 'Syncing...' : 'Sync Office' }}</span>
               </button>
 
-              <button
-                v-if="selectedLogIds.length > 0"
-                class="button danger-btn"
-                style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-weight:600;background:#dc2626;color:#ffffff;border-color:#dc2626;"
-                title="Delete selected log entries"
-                @click="deleteSelectedLogs"
-              >
-                <span>🗑</span>
-                <span>Delete ({{ selectedLogIds.length }})</span>
-              </button>
+              <!-- Selection Bulk Actions (visible only when rows are selected) -->
+              <template v-if="selectedLogIds.length > 0">
+                <button
+                  class="button danger-btn"
+                  style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-weight:600;background:#dc2626;color:#ffffff;border-color:#dc2626;"
+                  title="Delete selected log entries"
+                  @click="deleteSelectedLogs"
+                >
+                  <span>🗑</span>
+                  <span>Delete ({{ selectedLogIds.length }})</span>
+                </button>
 
-
-              <button
-                v-if="selectedLogIds.length > 0"
-                class="button danger-btn"
-                style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-weight:600;background:#dc2626;color:#ffffff;border-color:#dc2626;"
-                title="Delete selected log entries"
-                @click="deleteSelectedLogs"
-              >
-                <span>🗑</span>
-                <span>Delete ({{ selectedLogIds.length }})</span>
-              </button>
-
-              <button
-                v-if="selectedLogIds.length > 0"
-                class="button"
-                style="font-size:12px;padding:8px 10px;"
-                title="Clear selection"
-                @click="clearLogSelection"
-              >
-                ✕ Clear
-              </button>
+                <button
+                  class="button"
+                  style="font-size:12px;padding:8px 11px;color:var(--muted);"
+                  title="Clear selection"
+                  @click="clearLogSelection"
+                >
+                  ✕ Clear
+                </button>
+              </template>
 
               <button class="button primary" @click="modal = 'task'">＋ New log</button>
             </div>
@@ -2577,9 +2992,9 @@ onBeforeUnmount(() => {
                         >
                       </th>
                       <th style="width:20%;">Project Name</th>
-                      <th style="width:34%;">Task Name</th>
+                      <th style="width:36%;">Task Name</th>
                       <th style="width:17%;">Time / Hours</th>
-                      <th style="width:17%;">Assign Team / Sync</th>
+                      <th style="width:15%;">Team</th>
                       <th style="width:12%;text-align:right;">
                         <span v-if="!getGroupSelectedCount(group)">Actions</span>
                         <div v-else class="group-bulk-menu-wrap inline-header-menu">
@@ -2649,32 +3064,23 @@ onBeforeUnmount(() => {
                         </div>
                       </td>
 
-                      <!-- 4. Assign Team / Sync -->
+                      <!-- 4. Team -->
                       <td>
-                        <div class="team-sync-cell" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                          <div class="user-avatars-group" :title="'Logged by: ' + getLogUsers(item).join(', ')">
-                            <span
-                              v-for="u in getLogUsers(item).slice(0, 3)"
-                              :key="u"
-                              class="avatar-badge"
-                              :style="{ backgroundColor: getAvatarColor(u), color: '#ffffff' }"
-                            >
-                              {{ u.trim().charAt(0).toUpperCase() }}
-                            </span>
-                            <span
-                              v-if="getLogUsers(item).length > 3"
-                              class="avatar-badge overflow"
-                              :title="getLogUsers(item).slice(3).join(', ')"
-                            >
-                              +{{ getLogUsers(item).length - 3 }}
-                            </span>
-                          </div>
-
-                          <span v-if="item.officeSynced" class="office-sync-pill synced" title="Bi-directionally synced with Office Timesheets">
-                            🏢 Synced
+                        <div class="user-avatars-group" :title="'Logged by: ' + getLogUsers(item).join(', ')">
+                          <span
+                            v-for="u in getLogUsers(item).slice(0, 3)"
+                            :key="u"
+                            class="avatar-badge"
+                            :style="{ backgroundColor: getAvatarColor(u), color: '#ffffff' }"
+                          >
+                            {{ u.trim().charAt(0).toUpperCase() }}
                           </span>
-                          <span v-else class="office-sync-pill pending" title="Local entry - click to sync with Office Timesheets" @click.stop="handleManualSyncOffice">
-                            ⚡ Sync
+                          <span
+                            v-if="getLogUsers(item).length > 3"
+                            class="avatar-badge overflow"
+                            :title="getLogUsers(item).slice(3).join(', ')"
+                          >
+                            +{{ getLogUsers(item).length - 3 }}
                           </span>
                         </div>
                       </td>
@@ -2938,36 +3344,49 @@ onBeforeUnmount(() => {
         <section v-else-if="screen === 'integrations'" class="screen">
           <div class="page-head">
             <div>
-              <p class="eyebrow">WORKSPACE CONNECTIVITY & DEVELOPER HUB</p>
-              <h1>Integrations & API Management</h1>
-              <p class="muted">Manage connected accounts, app integrations, and developer API credentials in separate clean views.</p>
+              <p class="eyebrow">INTEGRATIONS</p>
+              <h1>Integrations</h1>
+              <p class="muted">Connected tools, workspaces, and API keys.</p>
             </div>
 
-            <div class="page-head-actions">
-              <button class="button primary" @click="openGenerateKeyModal">
-                🔑 Create New API Key
+            <div class="page-head-actions" style="display:flex;align-items:center;gap:8px;">
+              <button
+                type="button"
+                class="button secondary-btn"
+                title="Add an API key for any tool or custom integration"
+                @click="openAddApiKeyModal"
+              >
+                ＋ Add API Key
+              </button>
+              <button
+                type="button"
+                class="button primary"
+                title="Generate developer API credentials"
+                @click="openGenerateKeyModal"
+              >
+                ＋ Create API Key
               </button>
             </div>
           </div>
 
-          <!-- Top Sub-Navigation Tabs: Clearly separating Connected Workspaces, App Catalog, and Developer APIs -->
+          <!-- Top Sub-Navigation Tabs: 3 clean views -->
           <div class="integration-tabs">
             <button
               class="integration-tab-btn"
               :class="{ active: activeIntegrationTab === 'workspaces' }"
               @click="activeIntegrationTab = 'workspaces'"
             >
-              🏢 Connected Workspaces
-              <span class="tab-badge">{{ data.workspaceConnections?.length || 4 }}</span>
+              🏢 Connected
+              <span class="tab-badge">{{ data.workspaceConnections?.length || 0 }}</span>
             </button>
 
             <button
               class="integration-tab-btn"
-              :class="{ active: activeIntegrationTab === 'catalog' }"
-              @click="activeIntegrationTab = 'catalog'"
+              :class="{ active: activeIntegrationTab === 'available' }"
+              @click="activeIntegrationTab = 'available'"
             >
-              🔌 App Integrations Catalog
-              <span class="tab-badge">11</span>
+              🔌 Available
+              <span class="tab-badge">{{ availableIntegrationsList?.length || 0 }}</span>
             </button>
 
             <button
@@ -2975,462 +3394,108 @@ onBeforeUnmount(() => {
               :class="{ active: activeIntegrationTab === 'developer_api' }"
               @click="activeIntegrationTab = 'developer_api'"
             >
-              🔑 Developer APIs & Webhooks
+              🔑 Manage APIs
               <span class="tab-badge">{{ data.apiKeys?.length || 0 }}</span>
             </button>
           </div>
 
-          <!-- SECTION 1: Connected Workspaces View -->
+          <!-- TAB 1: Connected Workspaces View -->
           <div v-if="activeIntegrationTab === 'workspaces'" class="connected-workspaces-section">
-            <div class="panel-head" style="margin-bottom:16px;">
-              <div>
-                <h3>Active Workspace Connections</h3>
-                <p class="muted">Manage connected accounts and live sync options for your organization's workspaces.</p>
-              </div>
-            </div>
-
-            <div class="connected-workspaces-grid">
-              <article v-for="conn in (data.workspaceConnections || [])" :key="conn.id" class="workspace-conn-card">
+            <!-- Active Connections Panel Table -->
+            <section class="panel" style="margin-bottom:24px;">
+              <div class="panel-head" style="padding:16px 20px;">
                 <div>
-                  <div class="conn-head">
-                    <div style="display:flex;align-items:center;gap:12px;">
-                      <div class="conn-icon-box" :class="conn.type">
-                        {{ conn.icon }}
-                      </div>
-                      <div class="conn-title">
-                        <h4>{{ conn.name }}</h4>
-                        <p class="conn-subtitle">{{ conn.accountOrWorkspace }}</p>
-                      </div>
-                    </div>
-
-                    <span class="status-pill-badge" :class="conn.status">
-                      ● {{ conn.status === 'connected' ? 'Active' : 'Disconnected' }}
-                    </span>
-                  </div>
-
-                  <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">
-                    <span v-if="conn.type === 'officetimesheets'">Bi-directional enterprise timesheets sync active.</span>
-                    <span v-else-if="conn.type === 'figma'">Tracking UI frame design hours and system components.</span>
-                    <span v-else-if="conn.type === 'mcp'">Streaming AI coding agent context and prompt logs into work logs.</span>
-                    <span v-else-if="conn.type === 'notion'">Syncing meeting notes and task databases automatically.</span>
-                    <span v-else>Connected workspace integration active.</span>
-                  </p>
-                </div>
-
-                <div class="conn-meta">
-                  <div>
-                    <small class="muted" style="display:block;">Last Synced</small>
-                    <b>{{ conn.lastSynced }}</b>
-                  </div>
-
-                  <div style="display:flex;align-items:center;gap:8px;">
-                    <button class="button secondary-btn sm" @click="activeConnectorModal = conn.type">
-                      Configure
-                    </button>
-                    <button class="button primary sm" @click="notice(`Synced ${conn.name} workspace!`)">
-                      Sync Now
-                    </button>
-                  </div>
-                </div>
-              </article>
-            </div>
-
-            <!-- Featured Office Timesheets Bi-Directional Configuration Card -->
-            <section class="panel integration-featured-card" style="padding:24px;margin-top:12px;">
-              <div class="featured-card-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap;">
-                <div style="display:flex;align-items:center;gap:14px;">
-                  <div class="conn-icon-box office" style="width:48px;height:48px;font-size:24px;">
-                    🏢
-                  </div>
-                  <div>
-                    <h3 style="margin:0 0 4px;font-size:17px;display:flex;align-items:center;gap:10px;">
-                      Office Timesheets Bi-Directional Endpoint Config
-                      <span class="status-pill-badge" :class="data.officeIntegration?.status || 'connected'">
-                        ● {{ data.officeIntegration?.status === 'connected' ? 'Connected & Active' : 'Disconnected' }}
-                      </span>
-                    </h3>
-                    <p class="muted" style="margin:0;font-size:12px;">
-                      Endpoint settings for Office Timesheets v4 API synchronization.
-                    </p>
-                  </div>
-                </div>
-
-                <div style="display:flex;align-items:center;gap:10px;">
-                  <button
-                    type="button"
-                    class="button secondary-btn sm"
-                    :disabled="isTestingConnection"
-                    @click="handleTestConnection"
-                  >
-                    <span :class="{ 'spin-icon': isTestingConnection }">🔌</span>
-                    {{ isTestingConnection ? 'Testing...' : 'Test Connection' }}
-                  </button>
-                  <button
-                    type="button"
-                    class="button primary sm"
-                    :disabled="isSyncingOffice"
-                    @click="handleManualSyncOffice"
-                  >
-                    <span :class="{ 'spin-icon': isSyncingOffice }">🔄</span>
-                    {{ isSyncingOffice ? 'Syncing Now...' : 'Sync Now' }}
-                  </button>
+                  <h3 style="font-size:14px;margin:0 0 2px;">Active Workspace Connections</h3>
+                  <p class="muted" style="font-size:11px;margin:0;">Connected workspaces, developer platforms, and enterprise sync endpoints.</p>
                 </div>
               </div>
 
-              <form @submit.prevent="handleSaveOfficeSettings" class="integration-form-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;background:var(--bg-subtle, #f8fafc);padding:16px;border-radius:10px;border:1px solid var(--line, #e2e8f0);">
-                <div>
-                  <label class="form-label" style="margin-top:0;">API Endpoint URL</label>
-                  <input
-                    v-model="officeForm.endpoint"
-                    type="url"
-                    required
-                    placeholder="https://api.officetimesheets.com/v1/sync"
-                  >
-                </div>
-
-                <div>
-                  <label class="form-label" style="margin-top:0;display:flex;align-items:center;justify-content:space-between;">
-                    <span>Office API Secret Key</span>
-                    <button type="button" class="text-link" style="font-size:11px;" @click="showOfficeApiKey = !showOfficeApiKey">
-                      {{ showOfficeApiKey ? 'Hide' : 'Show Secret' }}
-                    </button>
-                  </label>
-                  <input
-                    v-model="officeForm.apiKey"
-                    :type="showOfficeApiKey ? 'text' : 'password'"
-                    required
-                    placeholder="Enter secret key..."
-                  >
-                </div>
-
-                <div style="grid-column: 1 / -1; display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-top:8px;border-top:1px dashed var(--line, #cbd5e1);">
-                  <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
-                    <label class="custom-toggle-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:13px;">
-                      <input type="checkbox" v-model="officeForm.enabled">
-                      <span>Enable Integration</span>
-                    </label>
-                    <label class="custom-toggle-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:13px;">
-                      <input type="checkbox" v-model="officeForm.autoSync">
-                      <span>Auto-Sync Work Logs</span>
-                    </label>
-                  </div>
-
-                  <button type="submit" class="button primary sm">Save Settings</button>
-                </div>
-              </form>
-            </section>
-          </div>
-
-          <!-- SECTION 2: App Integrations Catalog View -->
-          <div v-else-if="activeIntegrationTab === 'catalog'" class="app-catalog-section">
-            <div class="panel-head" style="margin-bottom:16px;">
-              <div>
-                <h3>App Integrations Catalog</h3>
-                <p class="muted">Connect design tools, AI context protocols, project management apps, and communication channels.</p>
-              </div>
-            </div>
-
-            <div class="integration-grid">
-              <!-- Figma Connector Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon figma">🎨</div>
-                    <div>
-                      <h3>Figma Integration</h3>
-                      <span class="category-pill">Design & UI</span>
-                    </div>
-                  </div>
-                  <p>Sync Figma frame edit time, design system components, and team activity logs directly into your daily work log.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge connected">● Connected</span>
-                  <button class="button primary sm" @click="activeConnectorModal = 'figma'">Configure</button>
-                </div>
-              </article>
-
-              <!-- MCP AI Context Protocol Connector Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon mcp">🤖</div>
-                    <div>
-                      <h3>MCP AI Context Protocol</h3>
-                      <span class="category-pill">AI Agents & Context</span>
-                    </div>
-                  </div>
-                  <p>Connect Model Context Protocol (MCP) server nodes (Cursor, Antigravity, Claude) to automatically capture coding context & log session hours.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge connected">● Connected</span>
-                  <button class="button primary sm" @click="activeConnectorModal = 'mcp'">Configure</button>
-                </div>
-              </article>
-
-              <!-- Notion Connector Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon notion">📝</div>
-                    <div>
-                      <h3>Notion Workspace</h3>
-                      <span class="category-pill">Docs & Knowledge</span>
-                    </div>
-                  </div>
-                  <p>Link Notion databases and workspace pages to automatically pull meeting notes, project specs, and deliverable checklists.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge connected">● Connected</span>
-                  <button class="button primary sm" @click="activeConnectorModal = 'notion'">Configure</button>
-                </div>
-              </article>
-
-              <!-- Office Timesheets Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon office">🏢</div>
-                    <div>
-                      <h3>Office Timesheets</h3>
-                      <span class="category-pill">Enterprise Sync</span>
-                    </div>
-                  </div>
-                  <p>Bi-directional enterprise timesheet synchronization endpoint for automated organization billing and time tracking.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge connected">● Connected</span>
-                  <button class="button primary sm" @click="activeConnectorModal = 'officetimesheets'">Configure</button>
-                </div>
-              </article>
-
-              <!-- GitHub Connector Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon github">🐙</div>
-                    <div>
-                      <h3>GitHub Org</h3>
-                      <span class="category-pill">Development</span>
-                    </div>
-                  </div>
-                  <p>Auto-generate work log entries when PRs are reviewed, commits are pushed, or issues are closed in your repository.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge active">Available</span>
-                  <button class="button secondary-btn sm" @click="notice('GitHub integration OAuth initiated')">Connect</button>
-                </div>
-              </article>
-
-              <!-- Slack Connector Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon slack">💬</div>
-                    <div>
-                      <h3>Slack Workspace</h3>
-                      <span class="category-pill">Communication</span>
-                    </div>
-                  </div>
-                  <p>Use <code>/log-work</code> slash commands or status updates in Slack to quickly record time entries without leaving chat.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge active">Available</span>
-                  <button class="button secondary-btn sm" @click="notice('Slack integration OAuth initiated')">Connect</button>
-                </div>
-              </article>
-
-              <!-- Jira Connector Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon jira">🎯</div>
-                    <div>
-                      <h3>Jira Software</h3>
-                      <span class="category-pill">Project Management</span>
-                    </div>
-                  </div>
-                  <p>Sync sprint tasks, issue status changes, and logged work hours automatically with Jira Cloud & Data Center.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge active">Available</span>
-                  <button class="button secondary-btn sm" @click="notice('Jira connector configured')">Connect</button>
-                </div>
-              </article>
-
-              <!-- Trello Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon trello">📋</div>
-                    <div>
-                      <h3>Trello Boards</h3>
-                      <span class="category-pill">Kanban Boards</span>
-                    </div>
-                  </div>
-                  <p>Sync board cards, due dates, and checklist items with your My Tracker to-do tasks and timesheet logs.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge active">Available</span>
-                  <button class="button secondary-btn sm" @click="notice('Trello connector ready')">Connect</button>
-                </div>
-              </article>
-
-              <!-- Google Drive Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon drive">📁</div>
-                    <div>
-                      <h3>Google Drive & Sheets</h3>
-                      <span class="category-pill">Cloud Storage</span>
-                    </div>
-                  </div>
-                  <p>Export work logs directly into Google Sheets spreadsheets or link Google Docs deliverables to tasks.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge active">Available</span>
-                  <button class="button secondary-btn sm" @click="notice('Google Drive linked')">Connect</button>
-                </div>
-              </article>
-
-              <!-- Linear Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon linear">⚡</div>
-                    <div>
-                      <h3>Linear App</h3>
-                      <span class="category-pill">Issue Tracking</span>
-                    </div>
-                  </div>
-                  <p>Sync Linear cycles, issues, and PR links with your time tracking workspace.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge active">Available</span>
-                  <button class="button secondary-btn sm" @click="notice('Linear App linked')">Connect</button>
-                </div>
-              </article>
-
-              <!-- VS Code Extension Card -->
-              <article class="integration-card">
-                <div>
-                  <div class="integration-card-top">
-                    <div class="integration-card-icon vscode">💻</div>
-                    <div>
-                      <h3>VS Code Extension</h3>
-                      <span class="category-pill">IDE Tooling</span>
-                    </div>
-                  </div>
-                  <p>Track active coding time per project file directly inside VS Code with status bar timer widget.</p>
-                </div>
-
-                <div class="integration-card-foot">
-                  <span class="status-pill-badge active">Available</span>
-                  <button class="button secondary-btn sm" @click="notice('VS Code token generated')">Install Widget</button>
-                </div>
-              </article>
-            </div>
-          </div>
-
-          <!-- SECTION 3: Developer APIs & Webhooks Tab -->
-          <div v-else-if="activeIntegrationTab === 'developer_api'" class="developer-api-section">
-            <!-- Top Action Banner -->
-            <div class="panel-head" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-              <div>
-                <h3>Developer API Keys & Authentication</h3>
-                <p class="muted">Generate secret API tokens to authenticate REST API requests, webhooks, and external integrations.</p>
+              <!-- Empty State when no connections active -->
+              <div v-if="!data.workspaceConnections || data.workspaceConnections.length === 0" style="padding:42px 20px;text-align:center;">
+                <div style="font-size:32px;margin-bottom:8px;">🏢</div>
+                <h4 style="font-size:14px;font-weight:600;margin:0 0 4px;color:var(--ink);">No Active Workspace Connections</h4>
+                <p class="muted" style="font-size:12px;max-width:420px;margin:0 auto;">
+                  Connect your development tools, issue trackers, and services below using your API key.
+                </p>
               </div>
 
-              <button class="button primary" @click="openGenerateKeyModal">
-                ＋ Generate New API Key
-              </button>
-            </div>
-
-            <!-- API Keys Table Panel -->
-            <section class="panel api-keys-panel" style="margin-bottom:24px;">
-              <div class="panel table-panel">
+              <!-- Table when connections are active -->
+              <div v-else class="table-panel" style="margin-bottom:0;border:0;border-radius:0;">
                 <table>
                   <thead>
                     <tr>
-                      <th>Key Name</th>
-                      <th>Secret API Key (Token)</th>
-                      <th>Created Date</th>
-                      <th>Expiration (Validity)</th>
-                      <th>Scopes</th>
-                      <th>Status</th>
-                      <th style="text-align:right;">Actions</th>
+                      <th style="width:45%;">Tool / Workspace</th>
+                      <th style="width:25%;">Last Synced</th>
+                      <th style="width:15%;">Status</th>
+                      <th style="width:15%;text-align:right;">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="k in (data.apiKeys || [])" :key="k.id">
-                      <td><b>{{ k.name }}</b></td>
+                    <tr v-for="conn in (data.workspaceConnections || [])" :key="conn.id">
                       <td>
-                        <div style="display:flex;align-items:center;gap:8px;">
-                          <code class="api-key-code" style="font-family:monospace;font-size:12px;background:var(--bg-subtle, #f1f5f9);padding:4px 8px;border-radius:4px;">
-                            {{ k.key.slice(0, 16) }}••••••••
-                          </code>
+                        <div style="display:flex;align-items:center;gap:12px;">
+                          <div
+                            v-if="conn.type.startsWith('custom')"
+                            style="width:34px;height:34px;border-radius:8px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.1);"
+                            :style="{ background: getAvatarGradient(conn.name) }"
+                          >
+                            {{ getAvatarLetter(conn.name) }}
+                          </div>
+                          <div
+                            v-else
+                            class="conn-icon-box sm"
+                            :class="conn.type"
+                            style="width:34px;height:34px;border-radius:8px;overflow:hidden;display:grid;place-items:center;background:#fff;border:1px solid var(--line);flex-shrink:0;"
+                          >
+                            <img v-if="conn.type === 'officetimesheets'" src="/icons/q-timesheets.png" alt="Q Timesheets" style="width:100%;height:100%;object-fit:cover;" />
+                            <span v-else-if="toolSvgIcons[conn.type]" v-html="toolSvgIcons[conn.type]" style="display:grid;place-items:center;"></span>
+                            <span v-else>{{ conn.icon || '⚡' }}</span>
+                          </div>
+                          <div>
+                            <b style="font-size:13px;display:block;">{{ conn.name }}</b>
+                            <span class="muted" style="font-size:11px;">{{ conn.accountOrWorkspace }}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span style="font-size:12px;font-weight:500;">{{ conn.lastSynced }}</span>
+                      </td>
+
+                      <td>
+                        <span class="status-pill-badge" :class="conn.status">
+                          ● {{ conn.status === 'connected' ? 'Connected' : 'Disconnected' }}
+                        </span>
+                      </td>
+
+                      <td style="text-align:right;">
+                        <div class="log-actions" style="justify-content:flex-end;gap:6px;">
                           <button
                             type="button"
                             class="btn-action-icon"
-                            title="Copy Full Secret API Key"
-                            @click="copyToClipboard(k.key, k.id)"
+                            :title="`Edit / Configure ${conn.name}`"
+                            @click="openConfigureConnectionModal(conn)"
                           >
-                            {{ copySuccessId === k.id ? '✓ Copied' : '📋 Copy' }}
-                          </button>
-                        </div>
-                      </td>
-                      <td>{{ k.createdDate }}</td>
-                      <td>
-                        <div class="validity-badge-year" title="Default validity set to 1 Year from creation date">
-                          📅 {{ k.expiryDate ? `Valid until ${k.expiryDate}` : '1 Year (Default)' }}
-                        </div>
-                      </td>
-                      <td>
-                        <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                          <span v-for="s in (k.scopes || ['Read Logs', 'Write Entries'])" :key="s" class="tag-badge-item" style="font-size:10px;padding:2px 6px;">
-                            {{ s }}
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        <span class="status-pill-badge" :class="k.status === 'revoked' ? 'revoked' : 'active'">
-                          ● {{ k.status === 'revoked' ? 'Revoked' : 'Active' }}
-                        </span>
-                      </td>
-                      <td style="text-align:right;">
-                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;">
-                          <button
-                            v-if="k.status !== 'revoked'"
-                            class="button danger-btn sm"
-                            title="Revoke this API Key immediately"
-                            @click="keyToRevoke = k"
-                          >
-                            Revoke
+                            ✎
                           </button>
                           <button
-                            class="button text-link sm"
-                            style="color:var(--muted);font-size:11px;"
-                            title="Remove key from list"
-                            @click="deleteApiKey(k.id); notice(`Key '${k.name}' deleted`)"
+                            type="button"
+                            class="btn-action-icon"
+                            :title="`Sync ${conn.name}`"
+                            :disabled="(conn.type === 'officetimesheets' && isSyncingOffice) || syncingConnectionId === conn.id"
+                            @click="handleSyncConnection(conn)"
                           >
-                            Delete
+                            <span :class="{ 'spin-icon': (conn.type === 'officetimesheets' && isSyncingOffice) || syncingConnectionId === conn.id }">🔄</span>
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-action-icon delete"
+                            :title="`Delete / Disconnect ${conn.name}`"
+                            @click="handleRemoveActiveConnection(conn)"
+                          >
+                            🗑
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                    <tr v-if="!data.apiKeys || !data.apiKeys.length">
-                      <td colspan="7" style="text-align:center;padding:24px;" class="muted">
-                        No API keys generated yet. Click "+ Generate New API Key" above to create one.
                       </td>
                     </tr>
                   </tbody>
@@ -3438,24 +3503,208 @@ onBeforeUnmount(() => {
               </div>
             </section>
 
-            <!-- Webhook & REST API Endpoint Documentation -->
-            <section class="panel webhook-docs-card" style="padding:20px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          </div>
+
+          <!-- TAB 2: Available Integrations -->
+          <div v-else-if="activeIntegrationTab === 'available'" class="connected-workspaces-section">
+            <section class="panel">
+              <div class="panel-head" style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
                 <div>
-                  <h3 style="margin:0 0 4px;">📡 REST API & Webhook Specifications</h3>
-                  <p class="muted" style="margin:0;font-size:12px;">Programmatically push timesheet logs or sync tasks into My Tracker via HTTP endpoints.</p>
+                  <h3 style="font-size:14px;margin:0 0 2px;">Available Integrations</h3>
+                  <p class="muted" style="font-size:11px;margin:0;">Connect your development tools, issue trackers, timesheets, and services.</p>
                 </div>
-                <button class="button secondary-btn sm" @click="notice('API Endpoint simulator active!')">
-                  ⚡ Test Endpoint
-                </button>
+                <div class="view-toggle-buttons" style="display:flex;align-items:center;gap:6px;">
+                  <button
+                    type="button"
+                    class="button sm"
+                    :class="{ primary: availableViewMode === 'grid', 'secondary-btn': availableViewMode !== 'grid' }"
+                    style="padding:4px 9px;font-size:11px;"
+                    title="Grid view"
+                    @click="availableViewMode = 'grid'"
+                  >▦ Grid</button>
+                  <button
+                    type="button"
+                    class="button sm"
+                    :class="{ primary: availableViewMode === 'list', 'secondary-btn': availableViewMode !== 'list' }"
+                    style="padding:4px 9px;font-size:11px;"
+                    title="List view"
+                    @click="availableViewMode = 'list'"
+                  >☰ List</button>
+                </div>
               </div>
-              
-              <div class="code-snippet-box" style="background:#0f172a;color:#f8fafc;padding:16px;border-radius:8px;font-family:monospace;font-size:12px;line-height:1.6;overflow-x:auto;">
-                <div style="color:#94a3b8;margin-bottom:8px;"># Send a POST request with your 1-Year Valid API Key to log work session</div>
-                <div><span style="color:#38bdf8;">curl</span> -X POST http://localhost:3000/api/v1/timesheets/sync \</div>
-                <div>  -H <span style="color:#a5f3fc;">"Authorization: Bearer {{ data.apiKeys?.[0]?.key || 'mytrk_live_sk_9a8f7e6d5c4b3a21' }}"</span> \</div>
-                <div>  -H <span style="color:#a5f3fc;">"Content-Type: application/json"</span> \</div>
-                <div>  -d <span style="color:#fde047;">'{"task": "Figma Design & MCP Sync", "project": "Website Redesign", "hours": 2.5, "user": "TEZ"}'</span></div>
+
+              <!-- Grid Cards View -->
+              <div v-if="availableViewMode === 'grid'" style="padding:16px;">
+                <div class="integration-grid" style="margin-bottom:0;">
+                  <article v-for="item in availableIntegrationsList" :key="item.id" class="integration-card">
+                    <div>
+                      <div class="integration-card-top">
+                        <div class="conn-icon-box sm" :class="item.type" style="width:38px;height:38px;border-radius:9px;overflow:hidden;display:grid;place-items:center;background:#fff;border:1px solid var(--line);flex-shrink:0;">
+                          <img v-if="item.type === 'officetimesheets'" src="/icons/q-timesheets.png" alt="Q Timesheets" style="width:100%;height:100%;object-fit:cover;" />
+                          <span v-else-if="toolSvgIcons[item.type]" v-html="toolSvgIcons[item.type]" style="display:grid;place-items:center;"></span>
+                          <span v-else>{{ item.icon }}</span>
+                        </div>
+                        <div>
+                          <h3>{{ item.name }}</h3>
+                          <span class="category-pill">{{ item.category }}</span>
+                        </div>
+                      </div>
+                      <p>{{ item.desc }}</p>
+                    </div>
+                    <div class="integration-card-foot">
+                      <span class="status-pill-badge active" style="font-size:10px;">Available</span>
+                      <button class="button secondary-btn sm" @click="openConnectIntegrationModal(item)">Connect</button>
+                    </div>
+                  </article>
+                </div>
+              </div>
+
+              <!-- List Table View -->
+              <div v-else class="table-panel" style="margin-bottom:0;border:0;border-radius:0;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width:30%;">Integration</th>
+                      <th style="width:20%;">Category</th>
+                      <th style="width:35%;">Capabilities</th>
+                      <th style="width:15%;text-align:right;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in availableIntegrationsList" :key="item.id">
+                      <td>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                          <div class="conn-icon-box sm" :class="item.type" style="width:32px;height:32px;border-radius:8px;overflow:hidden;display:grid;place-items:center;background:#fff;border:1px solid var(--line);flex-shrink:0;">
+                            <img v-if="item.type === 'officetimesheets'" src="/icons/q-timesheets.png" alt="Q Timesheets" style="width:100%;height:100%;object-fit:cover;" />
+                            <span v-else-if="toolSvgIcons[item.type]" v-html="toolSvgIcons[item.type]" style="display:grid;place-items:center;"></span>
+                            <span v-else>{{ item.icon }}</span>
+                          </div>
+                          <b style="font-size:13px;">{{ item.name }}</b>
+                        </div>
+                      </td>
+                      <td><span class="category-pill" style="margin:0;">{{ item.category }}</span></td>
+                      <td><span style="font-size:12px;color:var(--muted);">{{ item.desc }}</span></td>
+                      <td style="text-align:right;">
+                        <button class="button secondary-btn sm" @click="openConnectIntegrationModal(item)">Connect</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <!-- TAB 2: Manage APIs View (Streamlined with Dynamic Key Toggle) -->
+          <div v-else-if="activeIntegrationTab === 'developer_api'" class="developer-api-section">
+            <section class="panel api-keys-panel" style="margin-bottom:20px;">
+              <div class="panel-head" style="padding:16px 20px;">
+                <div>
+                  <h3 style="font-size:14px;margin:0 0 2px;">Developer API Keys</h3>
+                  <p class="muted" style="font-size:11px;margin:0;">Secret tokens to authenticate external scripts, webhooks, and third-party tools.</p>
+                </div>
+              </div>
+
+              <div class="table-panel" style="margin-bottom:0;border:0;border-radius:0;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width:40%;">Key Name / Token</th>
+                      <th style="width:20%;">Created</th>
+                      <th style="width:20%;">Expires</th>
+                      <th style="width:10%;">Status</th>
+                      <th style="width:10%;text-align:right;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="k in (data.apiKeys || [])" :key="k.id">
+                      <td>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                          <div
+                            v-if="getToolTypeFromKey(k) === 'custom'"
+                            style="width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.1);"
+                            :style="{ background: getAvatarGradient(k.name) }"
+                          >
+                            {{ getAvatarLetter(k.name) }}
+                          </div>
+                          <div
+                            v-else
+                            style="width:28px;height:28px;border-radius:7px;overflow:hidden;display:grid;place-items:center;background:#fff;border:1px solid var(--line);flex-shrink:0;"
+                          >
+                            <img v-if="getToolTypeFromKey(k) === 'officetimesheets'" src="/icons/q-timesheets.png" alt="Q Timesheets" style="width:100%;height:100%;object-fit:cover;" />
+                            <span v-else-if="toolSvgIcons[getToolTypeFromKey(k)]" v-html="toolSvgIcons[getToolTypeFromKey(k)]" style="display:grid;place-items:center;transform:scale(0.85);"></span>
+                            <span v-else style="font-size:13px;">🔑</span>
+                          </div>
+                          <div
+                            class="key-toggle-pill"
+                            :class="{ 'show-token': isKeyToggled(k.id) }"
+                            title="Click to toggle between Key Name and API Secret Token"
+                            @click.stop="toggleKeyDisplay(k.id)"
+                          >
+                            <span class="key-toggle-icon">{{ isKeyToggled(k.id) ? '🔐' : '🔑' }}</span>
+                            <span v-if="!isKeyToggled(k.id)" class="key-name-text">
+                              <b>{{ k.name }}</b>
+                            </span>
+                            <div v-else class="key-token-wrap">
+                              <code>{{ k.key.slice(0, 16) }}••••••••</code>
+                              <button
+                                type="button"
+                                class="btn-copy-mini"
+                                title="Copy Full Secret API Key"
+                                @click.stop="copyToClipboard(k.key, k.id)"
+                              >
+                                {{ copySuccessId === k.id ? '✓' : '📋' }}
+                              </button>
+                            </div>
+                            <span class="key-toggle-hint">⇄</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span style="font-size:12px;color:var(--muted);font-weight:500;">{{ k.createdDate }}</span>
+                      </td>
+
+                      <td>
+                        <span style="font-size:12px;color:var(--muted);font-weight:500;">{{ k.expiryDate || '2027-09-23' }}</span>
+                      </td>
+
+                      <td>
+                        <span class="status-pill-badge" :class="k.status === 'revoked' ? 'revoked' : 'active'">
+                          ● {{ k.status === 'revoked' ? 'Revoked' : 'Active' }}
+                        </span>
+                      </td>
+
+                      <td style="text-align:right;">
+                        <div class="log-actions" style="justify-content:flex-end;gap:6px;">
+                          <button
+                            v-if="k.status !== 'revoked'"
+                            type="button"
+                            class="button secondary-btn sm"
+                            style="padding:3px 8px;font-size:11px;"
+                            title="Revoke this API Key immediately"
+                            @click="keyToRevoke = k"
+                          >
+                            Revoke
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-action-icon delete"
+                            title="Permanently delete API key"
+                            @click="keyToDelete = k"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    <tr v-if="!data.apiKeys || !data.apiKeys.length">
+                      <td colspan="5" style="text-align:center;padding:32px;" class="muted">
+                        No API keys generated yet. Click "＋ Create API Key" above to generate your first secret token.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </section>
           </div>
@@ -3469,33 +3718,33 @@ onBeforeUnmount(() => {
       </main>
     </section>
 
-    <!-- Modal 1: Generate New API Key Modal -->
+    <!-- Modal 1: Create API Key Modal -->
     <div v-if="showGenerateKeyModal" class="backdrop" @click="showGenerateKeyModal = false">
-      <form class="modal" style="max-width:480px;" @click.stop @submit.prevent="handleCreateApiKeySubmit">
+      <form class="modal" style="max-width:440px;" @click.stop @submit.prevent="handleCreateApiKeySubmit">
         <button type="button" class="close" @click="showGenerateKeyModal = false">×</button>
-        <p class="eyebrow">DEVELOPER CREDENTIALS</p>
-        <h2>Generate New API Key</h2>
-        <p class="muted" style="font-size:12px;margin-bottom:16px;">
-          Create a new secret API token to connect your external scripts, Figma plugins, or MCP AI agents.
+        <p class="eyebrow">DEVELOPER ACCESS</p>
+        <h2>Create API Key</h2>
+        <p class="muted" style="font-size:12px;margin-bottom:14px;">
+          Generate a secret token to connect external scripts, tools, or agents.
         </p>
 
-        <!-- API Key Name -->
+        <!-- Key Name -->
         <label class="form-label" style="margin-top:0;">
-          API Key Name <span class="req-star">*</span>
+          Key Name <span class="req-star">*</span>
         </label>
         <input
           v-model="keyModalForm.name"
           required
-          placeholder="e.g. Production Figma Sync Key, MCP Agent Node"
+          placeholder="e.g. Figma Plugin, CI/CD Pipeline"
           style="margin-bottom:14px;"
         >
 
-        <!-- Expiration / Validity Selector: Defaulting to 1 Year -->
+        <!-- Expiration / Validity -->
         <label class="form-label">
-          Expiration / Validity Period
+          Expiration Period
         </label>
         <select v-model="keyModalForm.expirationOption" style="margin-bottom:14px;">
-          <option value="1year">1 Year (Valid until {{ new Date(Date.now() + 365*24*60*60*1000).toISOString().slice(0,10) }}) — Default</option>
+          <option value="1year">1 Year (Default)</option>
           <option value="90days">90 Days</option>
           <option value="30days">30 Days</option>
           <option value="never">Never Expires</option>
@@ -3522,7 +3771,7 @@ onBeforeUnmount(() => {
 
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;">
           <button type="button" class="button secondary-btn" @click="showGenerateKeyModal = false">Cancel</button>
-          <button type="submit" class="button primary">Generate Key</button>
+          <button type="submit" class="button primary">Create API Key</button>
         </div>
       </form>
     </div>
@@ -3580,77 +3829,142 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Modal 4: Connector Configuration Modals (Figma, MCP, Notion) -->
-    <div v-if="activeConnectorModal" class="backdrop" @click="activeConnectorModal = null">
-      <div class="modal" style="max-width:480px;" @click.stop>
-        <button type="button" class="close" @click="activeConnectorModal = null">×</button>
-        
-        <!-- Figma Setup -->
-        <form v-if="activeConnectorModal === 'figma'" @submit.prevent="handleSaveFigmaConfig">
-          <p class="eyebrow">FIGMA WORKSPACE CONNECTOR</p>
-          <h2>Configure Figma Integration</h2>
-          <p class="muted" style="font-size:12px;margin-bottom:14px;">Sync design component hours and canvas frame time into My Tracker.</p>
+    <!-- Modal: Delete Key Confirmation -->
+    <div v-if="keyToDelete" class="backdrop" @click="keyToDelete = null">
+      <div class="modal" style="max-width:420px;" @click.stop>
+        <button type="button" class="close" @click="keyToDelete = null">×</button>
+        <p class="eyebrow" style="color:#ef4444;">DELETE API KEY</p>
+        <h2>Delete API Key?</h2>
+        <p class="muted" style="font-size:13px;margin-bottom:20px;">
+          Are you sure you want to permanently delete API key <b>"{{ keyToDelete.name }}"</b>? It will be completely removed from your account.
+        </p>
 
-          <label class="form-label" style="margin-top:0;">Figma Team ID / Organization Handle</label>
-          <input v-model="figmaForm.teamId" required style="margin-bottom:14px;">
-
-          <label class="custom-toggle-label" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:20px;">
-            <input type="checkbox" v-model="figmaForm.autoLogFrames">
-            <span>Auto-create work log entries on Figma frame edits</span>
-          </label>
-
-          <div style="display:flex;justify-content:flex-end;gap:10px;">
-            <button type="button" class="button secondary-btn" @click="activeConnectorModal = null">Cancel</button>
-            <button type="submit" class="button primary">Save Connection</button>
-          </div>
-        </form>
-
-        <!-- MCP Setup -->
-        <form v-else-if="activeConnectorModal === 'mcp'" @submit.prevent="handleSaveMcpConfig">
-          <p class="eyebrow">MODEL CONTEXT PROTOCOL (MCP)</p>
-          <h2>Configure MCP AI Agent Server</h2>
-          <p class="muted" style="font-size:12px;margin-bottom:14px;">Connect local/remote MCP server nodes (Cursor, Antigravity, Claude) to log agent sessions.</p>
-
-          <label class="form-label" style="margin-top:0;">MCP Server URL / Port Endpoint</label>
-          <input v-model="mcpForm.serverUrl" required style="margin-bottom:14px;">
-
-          <label class="custom-toggle-label" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:20px;">
-            <input type="checkbox" v-model="mcpForm.streamLogs">
-            <span>Stream coding prompt metrics & task logs automatically</span>
-          </label>
-
-          <div style="display:flex;justify-content:flex-end;gap:10px;">
-            <button type="button" class="button secondary-btn" @click="activeConnectorModal = null">Cancel</button>
-            <button type="submit" class="button primary">Connect MCP Node</button>
-          </div>
-        </form>
-
-        <!-- Notion Setup -->
-        <form v-else-if="activeConnectorModal === 'notion'" @submit.prevent="handleSaveNotionConfig">
-          <p class="eyebrow">NOTION WORKSPACE SYNC</p>
-          <h2>Configure Notion Integration</h2>
-          <p class="muted" style="font-size:12px;margin-bottom:14px;">Link Notion databases and meeting note pages with your work log.</p>
-
-          <label class="form-label" style="margin-top:0;">Notion Database ID</label>
-          <input v-model="notionForm.databaseId" required style="margin-bottom:14px;">
-
-          <label class="custom-toggle-label" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:20px;">
-            <input type="checkbox" v-model="notionForm.syncPages">
-            <span>Import meeting notes into My Tracker automatically</span>
-          </label>
-
-          <div style="display:flex;justify-content:flex-end;gap:10px;">
-            <button type="button" class="button secondary-btn" @click="activeConnectorModal = null">Cancel</button>
-            <button type="submit" class="button primary">Link Database</button>
-          </div>
-        </form>
-
-        <!-- General Connector Setup -->
-        <div v-else>
-          <h2>Configure {{ activeConnectorModal }}</h2>
-          <p class="muted" style="margin-bottom:16px;">Connection endpoint active.</p>
-          <button class="button primary" @click="activeConnectorModal = null">Done</button>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;">
+          <button type="button" class="button secondary-btn" @click="keyToDelete = null">Cancel</button>
+          <button type="button" class="button danger-btn" @click="handleDeleteKeyConfirm">
+            Confirm Delete
+          </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Modal 4: Connect & Configure Integration Modal (Simplified & Clean) -->
+    <div v-if="showConnectionModal" class="backdrop" @click="showConnectionModal = false">
+      <div class="modal" style="max-width:420px;padding:22px 24px;" @click.stop>
+        <button type="button" class="close" @click="showConnectionModal = false">×</button>
+        
+        <form @submit.prevent="handleSaveConnection">
+          <!-- Header with Icon & Name -->
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+            <div
+              v-if="isCustomConnection"
+              style="width:38px;height:38px;border-radius:9px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:16px;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,0.12);"
+              :style="{ background: getAvatarGradient(connectionForm.customName) }"
+            >
+              {{ getAvatarLetter(connectionForm.customName) }}
+            </div>
+            <div
+              v-else
+              class="conn-icon-box"
+              :class="selectedIntegration?.type"
+              style="width:38px;height:38px;border-radius:9px;overflow:hidden;display:grid;place-items:center;background:#fff;border:1px solid var(--line);flex-shrink:0;"
+            >
+              <img v-if="selectedIntegration?.type === 'officetimesheets'" src="/icons/q-timesheets.png" alt="Q Timesheets" style="width:100%;height:100%;object-fit:cover;" />
+              <span v-else-if="selectedIntegration && toolSvgIcons[selectedIntegration.type]" v-html="toolSvgIcons[selectedIntegration.type]" style="display:grid;place-items:center;"></span>
+              <span v-else>{{ selectedIntegration?.icon || '⚡' }}</span>
+            </div>
+            <div style="min-width:0;flex:1;">
+              <h2 style="font-size:17px;margin:0 0 3px;line-height:1.2;">
+                {{ editingConnectionId ? 'Configure' : 'Connect' }} {{ isCustomConnection ? (connectionForm.customName || 'API Integration') : selectedIntegration?.name }}
+              </h2>
+              <a
+                v-if="!isCustomConnection && selectedIntegration?.redirectUrl"
+                :href="selectedIntegration.redirectUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-link"
+                style="font-size:11px;display:inline-flex;align-items:center;gap:3px;"
+              >
+                Get API Key from {{ selectedIntegration.name }} ↗
+              </a>
+              <span v-else class="muted" style="font-size:11px;">
+                Enter API secret token to establish secure connection
+              </span>
+            </div>
+          </div>
+
+          <!-- Tool Name if adding custom API from header -->
+          <div v-if="isCustomConnection" style="margin-bottom:14px;">
+            <label class="form-label" style="margin-top:0;">Tool / Service Name <span class="req-star">*</span></label>
+            <input
+              v-model="connectionForm.customName"
+              type="text"
+              required
+              placeholder="e.g. GitLab, Postman, Custom Tool..."
+              style="margin-bottom:0;"
+            >
+          </div>
+
+          <!-- API Key Input Only with inside Eye toggle button -->
+          <div style="margin-bottom:20px;">
+            <label class="form-label" style="margin-top:0;">API Key / Secret Token <span class="req-star">*</span></label>
+            <div style="position:relative;display:flex;align-items:center;">
+              <input
+                v-model="connectionForm.apiKey"
+                :type="connectionForm.showApiKey ? 'text' : 'password'"
+                required
+                :placeholder="isCustomConnection ? 'Enter secret API key or token...' : (selectedIntegration?.keyPlaceholder || 'Enter API Key...')"
+                style="padding-right:38px;margin-bottom:0;width:100%;"
+              >
+              <button
+                type="button"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;display:flex;align-items:center;justify-content:center;color:var(--muted);outline:none;"
+                :title="connectionForm.showApiKey ? 'Hide Secret Key' : 'Show Secret Key'"
+                @click="connectionForm.showApiKey = !connectionForm.showApiKey"
+              >
+                <svg v-if="!connectionForm.showApiKey" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg v-else width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Footer Action Buttons -->
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <button
+              type="button"
+              class="button secondary-btn sm"
+              :disabled="isTestingConnection"
+              @click="handleTestConnection"
+            >
+              <span :class="{ 'spin-icon': isTestingConnection }">🔌</span>
+              {{ isTestingConnection ? 'Testing...' : 'Test' }}
+            </button>
+
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button
+                v-if="editingConnectionId"
+                type="button"
+                class="button danger-btn sm"
+                title="Disconnect this integration"
+                @click="handleDisconnectFromModal"
+              >
+                Disconnect
+              </button>
+              <button type="button" class="button secondary-btn sm" @click="showConnectionModal = false">
+                Cancel
+              </button>
+              <button type="submit" class="button primary sm">
+                {{ editingConnectionId ? 'Save' : 'Save & Connect' }}
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
 

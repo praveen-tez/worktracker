@@ -54,7 +54,7 @@ export interface ApiKey {
 export interface WorkspaceConnection {
   id: string
   name: string
-  type: 'officetimesheets' | 'figma' | 'mcp' | 'notion' | 'github' | 'slack' | 'jira' | 'trello' | 'drive' | 'linear' | 'vscode'
+  type: 'officetimesheets' | 'figma' | 'mcp' | 'notion' | 'github' | 'slack' | 'jira' | 'trello' | 'drive' | 'linear' | 'vscode' | string
   icon: string
   accountOrWorkspace: string
   status: 'connected' | 'syncing' | 'disconnected' | 'error'

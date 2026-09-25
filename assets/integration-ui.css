@@ -264,3 +264,84 @@
   background: #18243a;
   border-color: #2a3c5a;
 }
+
+/* Dynamic Key Name / Token Toggle Pill */
+.key-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-subtle, #f1f5f9);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #e2e8f0);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.16s ease;
+  max-width: 100%;
+}
+
+.key-toggle-pill:hover {
+  background: #e9eef6;
+  border-color: #cbd5e1;
+}
+
+.key-toggle-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.key-name-text {
+  font-size: 13px;
+  color: var(--ink, #15243b);
+}
+
+.key-token-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.key-token-wrap code {
+  font-family: monospace;
+  font-size: 12px;
+  color: #0284c7;
+  letter-spacing: 0.5px;
+}
+
+.btn-copy-mini {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.btn-copy-mini:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.key-toggle-hint {
+  font-size: 11px;
+  color: var(--muted, #64748b);
+  opacity: 0.6;
+  margin-left: 2px;
+}
+
+.dark .key-toggle-pill {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.dark .key-toggle-pill:hover {
+  background: #27364f;
+}
+
+.dark .key-name-text {
+  color: #f8fafc;
+}
+
+.dark .key-token-wrap code {
+  color: #38bdf8;
+}

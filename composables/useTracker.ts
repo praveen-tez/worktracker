@@ -63,85 +63,17 @@ const oneYearFromNow = () => {
   return d.toISOString().slice(0, 10)
 }
 
-const defaultApiKeys: ApiKey[] = [
-  {
-    id: 'key-demo-1',
-    name: 'Office Timesheets Connector',
-    key: 'mytrk_live_sk_9a8f7e6d5c4b3a21',
-    createdDate: new Date().toISOString().slice(0, 10),
-    expiryDate: oneYearFromNow(),
-    expirationOption: '1year',
-    scopes: ['Read Logs', 'Write Entries', 'Auto Sync'],
-    lastUsed: 'Just now',
-    status: 'active'
-  },
-  {
-    id: 'key-demo-2',
-    name: 'Figma Design System Sync',
-    key: 'mytrk_live_sk_3f1d8c9a2b5e4017',
-    createdDate: new Date().toISOString().slice(0, 10),
-    expiryDate: oneYearFromNow(),
-    expirationOption: '1year',
-    scopes: ['Read Logs', 'Write Entries'],
-    lastUsed: '2h ago',
-    status: 'active'
-  }
-]
+const defaultApiKeys: ApiKey[] = []
 
-const defaultWorkspaceConnections: WorkspaceConnection[] = [
-  {
-    id: 'conn-office',
-    name: 'Office Timesheets Enterprise',
-    type: 'officetimesheets',
-    icon: '🏢',
-    accountOrWorkspace: 'Acme Corp (v4.2 Endpoint)',
-    status: 'connected',
-    autoSync: true,
-    lastSynced: 'Today at 10:30 AM',
-    details: { endpoint: 'https://api.officetimesheets.com/v1/sync' }
-  },
-  {
-    id: 'conn-figma',
-    name: 'Figma Design Team',
-    type: 'figma',
-    icon: '🎨',
-    accountOrWorkspace: 'Product UI System (Team TEZ)',
-    status: 'connected',
-    autoSync: true,
-    lastSynced: '15m ago',
-    details: { teamId: 'figma_team_99182', autoLogFrames: true }
-  },
-  {
-    id: 'conn-mcp',
-    name: 'MCP Local AI Context Protocol',
-    type: 'mcp',
-    icon: '🤖',
-    accountOrWorkspace: 'Antigravity / Cursor Agent Node',
-    status: 'connected',
-    autoSync: true,
-    lastSynced: 'Just now',
-    details: { port: 3000, streamLogs: true }
-  },
-  {
-    id: 'conn-notion',
-    name: 'Notion Workspace',
-    type: 'notion',
-    icon: '📝',
-    accountOrWorkspace: 'TEZ Engineering & Product Docs',
-    status: 'connected',
-    autoSync: false,
-    lastSynced: 'Yesterday at 4:15 PM',
-    details: { dbId: 'notion_db_881920' }
-  }
-]
+const defaultWorkspaceConnections: WorkspaceConnection[] = []
 
 const defaultOfficeIntegration: OfficeIntegrationConfig = {
-  enabled: true,
+  enabled: false,
   endpoint: 'https://api.officetimesheets.com/v1/sync',
-  apiKey: 'ots_secret_88x99z22k11',
-  autoSync: true,
-  lastSynced: 'Today at 10:30 AM',
-  status: 'connected'
+  apiKey: '',
+  autoSync: false,
+  lastSynced: null,
+  status: 'disconnected'
 }
 
 const initial: TrackerData = {
@@ -194,21 +126,29 @@ export function useTracker() {
             return { ...l, startTime: st, endTime: et, officeSynced: l.officeSynced ?? true }
           })
 
-          data.value = {
-            ...initial,
-            ...parsed,
-            logs: normalizedLogs,
-            todos: parsed.todos || [],
-            feedback: parsed.feedback || [],
-            meetings: parsed.meetings || [],
-            projects: parsed.projects && parsed.projects.length ? parsed.projects : defaultProjects,
-            users: parsed.users && parsed.users.length ? parsed.users : defaultUsers,
-            tags: parsed.tags && parsed.tags.length ? parsed.tags : defaultTags,
-            notifications: parsed.notifications || defaultNotifications,
-            apiKeys: parsed.apiKeys && parsed.apiKeys.length ? parsed.apiKeys : defaultApiKeys,
-            officeIntegration: parsed.officeIntegration || defaultOfficeIntegration,
-            workspaceConnections: parsed.workspaceConnections && parsed.workspaceConnections.length ? parsed.workspaceConnections : defaultWorkspaceConnections
-          }
+            const legacyDummyIds = new Set(['conn-office', 'conn-figma', 'conn-mcp', 'conn-notion'])
+            const legacyDummyKeyIds = new Set(['key-demo-1', 'key-demo-2'])
+            const userConnections = Array.isArray(parsed.workspaceConnections)
+              ? parsed.workspaceConnections.filter((c: any) => !legacyDummyIds.has(c.id))
+              : []
+            const userApiKeys = Array.isArray(parsed.apiKeys)
+              ? parsed.apiKeys.filter((k: any) => !legacyDummyKeyIds.has(k.id))
+              : []
+            data.value = {
+              ...initial,
+              ...parsed,
+              logs: normalizedLogs,
+              todos: parsed.todos || [],
+              feedback: parsed.feedback || [],
+              meetings: parsed.meetings || [],
+              projects: parsed.projects && parsed.projects.length ? parsed.projects : defaultProjects,
+              users: parsed.users && parsed.users.length ? parsed.users : defaultUsers,
+              tags: parsed.tags && parsed.tags.length ? parsed.tags : defaultTags,
+              notifications: parsed.notifications || defaultNotifications,
+              apiKeys: userApiKeys,
+              officeIntegration: parsed.officeIntegration || defaultOfficeIntegration,
+              workspaceConnections: userConnections
+            }
         } catch (e) {
           console.error('Failed to parse tracker storage', e)
         }
@@ -244,8 +184,8 @@ export function useTracker() {
     }
     if (isAutoSync) {
       addNotification({
-        title: 'Office Timesheets Synced',
-        message: `Work log "${entry.task || 'Time Entry'}" pushed to Office Timesheets.`,
+        title: 'Q Timesheets Synced',
+        message: `Work log "${entry.task || 'Time Entry'}" pushed to Q Timesheets.`,
         time: 'Just now',
         type: 'success',
         read: false
@@ -387,6 +327,18 @@ export function useTracker() {
       const target = data.value.apiKeys.find(k => k.id === id)
       if (target) {
         target.status = 'revoked'
+        // Also update linked workspace connection status if exists
+        if (data.value.workspaceConnections) {
+          const conn = data.value.workspaceConnections.find(c =>
+            id === `key-conn-${c.type}` ||
+            id === `key-conn-${c.id}` ||
+            target.name.toLowerCase().includes(c.name.toLowerCase()) ||
+            c.name.toLowerCase().includes(target.name.toLowerCase())
+          )
+          if (conn) {
+            conn.status = 'disconnected'
+          }
+        }
         save()
       }
     }
@@ -394,7 +346,29 @@ export function useTracker() {
 
   const deleteApiKey = (id: string) => {
     if (data.value.apiKeys) {
+      const keyToDelete = data.value.apiKeys.find(k => k.id === id)
       data.value.apiKeys = data.value.apiKeys.filter(k => k.id !== id)
+
+      // Also remove corresponding workspace connection if exists
+      if (keyToDelete && data.value.workspaceConnections) {
+        data.value.workspaceConnections = data.value.workspaceConnections.filter(c => {
+          const matchesId = id === `key-conn-${c.type}` || id === `key-conn-${c.id}` || id === c.id
+          const cleanKeyName = keyToDelete.name.toLowerCase().replace(/connector|key|sync|api/g, '').trim()
+          const matchesName = cleanKeyName.length >= 2 && (
+            c.name.toLowerCase().includes(cleanKeyName) ||
+            cleanKeyName.includes(c.name.toLowerCase())
+          )
+          const matchesKey = !!c.details?.apiKey && c.details.apiKey === keyToDelete.key
+          const shouldDelete = matchesId || matchesName || matchesKey
+          if (shouldDelete && (c.type === 'officetimesheets' || c.id === 'conn-office')) {
+            if (data.value.officeIntegration) {
+              data.value.officeIntegration.enabled = false
+              data.value.officeIntegration.status = 'disconnected'
+            }
+          }
+          return !shouldDelete
+        })
+      }
       save()
     }
   }
@@ -408,35 +382,266 @@ export function useTracker() {
   }
 
   const syncOfficeTimesheets = async () => {
-    if (!data.value.officeIntegration) return { success: false, syncedCount: 0 }
-    data.value.officeIntegration.status = 'syncing'
-    
-    // Simulate API Network Delay
-    await new Promise(r => setTimeout(r, 600))
-    
-    let count = 0
-    data.value.logs.forEach(l => {
-      if (!l.officeSynced) {
-        l.officeSynced = true
-        l.officeSyncTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        count++
+    const officeConn = data.value.workspaceConnections?.find(c => c.type === 'officetimesheets')
+    const token = officeConn?.details?.apiKey || data.value.officeIntegration?.apiKey
+
+    if (!token) return { success: false, syncedCount: 0, error: 'No API token found. Please connect Q Timesheets first.' }
+
+    // Set status to syncing in both places
+    if (data.value.officeIntegration) data.value.officeIntegration.status = 'syncing'
+    if (officeConn) officeConn.status = 'syncing'
+
+    try {
+      // Call the real server-side sync route (avoids CORS)
+      const result = await $fetch<{
+        success: boolean
+        pushed: number
+        syncedIds: Record<string, string>
+        pulled: {
+          id: string
+          start: string
+          end: string | null
+          duration: number | null
+          description: string
+          project?: { id: string; name: string }
+          billable: boolean
+        }[]
+        errors: string[]
+      }>('/api/qtimesheets/sync', {
+        method: 'POST',
+        body: {
+          token,
+          logs: data.value.logs,
+          direction: 'both'
+        }
+      })
+
+      const nowStr = `Today at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+
+      // ── Mark pushed logs as synced ──────────────────────────────────────
+      let pushCount = 0
+      if (result.syncedIds) {
+        for (const [localId, remoteId] of Object.entries(result.syncedIds)) {
+          const log = data.value.logs.find(l => l.id === localId)
+          if (log) {
+            log.officeSynced = true
+            log.officeSyncId = remoteId
+            log.officeSyncTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            pushCount++
+          }
+        }
       }
-    })
-    
-    const nowStr = `Today at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-    data.value.officeIntegration.status = 'connected'
-    data.value.officeIntegration.lastSynced = nowStr
-    
+
+      // ── Import pulled entries not already in local logs ─────────────────
+      let pullCount = 0
+      if (result.pulled?.length) {
+        for (const entry of result.pulled) {
+          // Skip if already synced (matching by officeSyncId)
+          const alreadyHave = data.value.logs.some(l => l.officeSyncId === entry.id)
+          if (alreadyHave) continue
+
+          // Skip if no end time (still running timer)
+          if (!entry.end) continue
+
+          const startDate = new Date(entry.start)
+          const endDate = new Date(entry.end)
+          const hours = entry.duration != null
+            ? Math.round((entry.duration / 3600) * 10) / 10
+            : Math.round(((endDate.getTime() - startDate.getTime()) / 3600000) * 10) / 10
+
+          if (hours <= 0) continue
+
+          const dateStr = startDate.toISOString().split('T')[0]
+          const startTime = startDate.toTimeString().substring(0, 5)
+          const endTime = endDate.toTimeString().substring(0, 5)
+
+          const newLog = {
+            id: `qtms-${entry.id}`,
+            date: dateStr,
+            user: data.value.users?.[0] || 'Me',
+            text: entry.description || 'Time entry from Q Timesheets',
+            project: entry.project?.name || '',
+            hours,
+            startTime,
+            endTime,
+            officeSynced: true,
+            officeSyncId: entry.id,
+            officeSyncTime: nowStr
+          }
+          data.value.logs.unshift(newLog)
+          pullCount++
+        }
+      }
+
+      // ── Update connection status ─────────────────────────────────────────
+      if (data.value.officeIntegration) {
+        data.value.officeIntegration.status = 'connected'
+        data.value.officeIntegration.lastSynced = nowStr
+      }
+      if (officeConn) {
+        officeConn.lastSynced = nowStr
+        officeConn.status = 'connected'
+      }
+
+      const totalCount = pushCount + pullCount
+      const parts = []
+      if (pushCount > 0) parts.push(`pushed ${pushCount} log(s) to Q Timesheets`)
+      if (pullCount > 0) parts.push(`imported ${pullCount} entry(s) from Q Timesheets`)
+      if (result.errors?.length) parts.push(`${result.errors.length} warning(s)`)
+
+      addNotification({
+        title: totalCount > 0 ? '✅ Q Timesheets Sync Complete' : 'Q Timesheets: Already up to date',
+        message: parts.length ? parts.join(', ') + '.' : 'All logs are already synced.',
+        time: 'Just now',
+        type: 'success',
+        read: false
+      })
+
+      save()
+      return { success: true, syncedCount: totalCount, pushed: pushCount, pulled: pullCount, errors: result.errors }
+
+    } catch (e: any) {
+      const errMsg = e?.data?.message || e?.message || 'Sync failed'
+      if (data.value.officeIntegration) data.value.officeIntegration.status = 'error'
+      if (officeConn) officeConn.status = 'error'
+
+      addNotification({
+        title: '❌ Q Timesheets Sync Failed',
+        message: errMsg,
+        time: 'Just now',
+        type: 'warning',
+        read: false
+      })
+
+      save()
+      return { success: false, syncedCount: 0, error: errMsg }
+    }
+  }
+
+  const connectWorkspace = (conn: WorkspaceConnection) => {
+    if (!data.value.workspaceConnections) {
+      data.value.workspaceConnections = []
+    }
+    const idx = data.value.workspaceConnections.findIndex(c => c.type === conn.type || c.id === conn.id)
+    if (idx >= 0) {
+      data.value.workspaceConnections[idx] = { ...data.value.workspaceConnections[idx], ...conn }
+    } else {
+      data.value.workspaceConnections.push(conn)
+    }
+
+    if (conn.type === 'officetimesheets') {
+      data.value.officeIntegration = {
+        enabled: true,
+        endpoint: conn.details?.endpoint || 'https://api.officetimesheets.com/v1/sync',
+        apiKey: conn.details?.apiKey || '',
+        autoSync: conn.autoSync,
+        lastSynced: conn.lastSynced || 'Just now',
+        status: 'connected'
+      }
+    }
+
+    // Automatically sync into Manage APIs list
+    if (!data.value.apiKeys) data.value.apiKeys = []
+    const keyId = `key-conn-${conn.type || conn.id}`
+    const existingKeyIdx = data.value.apiKeys.findIndex(k =>
+      k.id === keyId ||
+      k.name.toLowerCase() === `${conn.name} Connector`.toLowerCase() ||
+      k.name.toLowerCase() === conn.name.toLowerCase()
+    )
+    const secretKeyVal = conn.details?.apiKey || `mytrk_live_sk_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`
+
+    if (existingKeyIdx >= 0) {
+      data.value.apiKeys[existingKeyIdx] = {
+        ...data.value.apiKeys[existingKeyIdx],
+        name: `${conn.name} Connector`,
+        key: secretKeyVal,
+        status: 'active',
+        lastUsed: 'Just now'
+      }
+    } else {
+      data.value.apiKeys.unshift({
+        id: keyId,
+        name: `${conn.name} Connector`,
+        key: secretKeyVal,
+        createdDate: new Date().toISOString().slice(0, 10),
+        expiryDate: oneYearFromNow(),
+        expirationOption: '1year',
+        scopes: ['Read Logs', 'Write Entries', 'Auto Sync'],
+        lastUsed: 'Just now',
+        status: 'active'
+      })
+    }
+
     addNotification({
-      title: 'Bi-directional Sync Complete',
-      message: `Successfully synchronized ${count} timesheet log(s) with Office Timesheets.`,
+      title: `${conn.name} Connected`,
+      message: `Successfully connected ${conn.name} with your workspace.`,
       time: 'Just now',
       type: 'success',
       read: false
     })
-    
+
     save()
-    return { success: true, syncedCount: count }
+  }
+
+  const disconnectWorkspace = (idOrType: string) => {
+    if (!data.value.workspaceConnections) return
+    const target = data.value.workspaceConnections.find(c => c.id === idOrType || c.type === idOrType)
+    data.value.workspaceConnections = data.value.workspaceConnections.filter(
+      c => c.id !== idOrType && c.type !== idOrType
+    )
+    if (idOrType === 'conn-office' || idOrType === 'officetimesheets' || target?.type === 'officetimesheets') {
+      if (data.value.officeIntegration) {
+        data.value.officeIntegration.enabled = false
+        data.value.officeIntegration.status = 'disconnected'
+      }
+    }
+    // Also remove from apiKeys to keep both tabs perfectly in sync
+    if (target && data.value.apiKeys) {
+      data.value.apiKeys = data.value.apiKeys.filter(k =>
+        k.id !== `key-conn-${target.type}` &&
+        k.id !== `key-conn-${target.id}` &&
+        k.id !== target.id &&
+        k.name.toLowerCase() !== `${target.name} Connector`.toLowerCase() &&
+        k.name.toLowerCase() !== target.name.toLowerCase()
+      )
+    }
+    if (target) {
+      addNotification({
+        title: `${target.name} Disconnected`,
+        message: `${target.name} integration has been disconnected and removed from active connections.`,
+        time: 'Just now',
+        type: 'info',
+        read: false
+      })
+    }
+    save()
+  }
+
+  const syncWorkspaceConnection = async (idOrType: string) => {
+    if (!data.value.workspaceConnections) return { success: false }
+    const conn = data.value.workspaceConnections.find(c => c.id === idOrType || c.type === idOrType)
+    if (!conn) return { success: false }
+
+    if (conn.type === 'officetimesheets') {
+      return await syncOfficeTimesheets()
+    }
+
+    conn.status = 'syncing'
+    await new Promise(r => setTimeout(r, 600))
+    const nowStr = `Today at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    conn.lastSynced = nowStr
+    conn.status = 'connected'
+
+    addNotification({
+      title: `${conn.name} Synced`,
+      message: `Workspace data and logs refreshed for ${conn.name}.`,
+      time: 'Just now',
+      type: 'success',
+      read: false
+    })
+
+    save()
+    return { success: true }
   }
 
   const syncSheets = async () => {
@@ -470,6 +675,9 @@ export function useTracker() {
     deleteApiKey,
     updateOfficeIntegration,
     syncOfficeTimesheets,
+    connectWorkspace,
+    disconnectWorkspace,
+    syncWorkspaceConnection,
     syncSheets,
     hasSheets: computed(() => Boolean(config.public.sheetsEndpoint))
   }

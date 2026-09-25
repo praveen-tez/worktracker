@@ -3330,7 +3330,7 @@ input[type="date"], input[type="time"] {
   margin-top: 2px;
 }
 
-.tag-badge-item {
+.table-project-cell .tag-badge-item {
   background: #f1f5f9 !important;
   border: 1px solid #e2e8f0 !important;
   color: #64748b !important;
@@ -3344,20 +3344,83 @@ input[type="date"], input[type="time"] {
   transition: all 0.15s ease !important;
 }
 
-.tag-badge-item:hover {
+.table-project-cell .tag-badge-item:hover {
   background: #e2e8f0 !important;
   color: #334155 !important;
 }
 
-.dark .tag-badge-item {
+.dark .table-project-cell .tag-badge-item {
   background: #1e2d48 !important;
   border-color: #2b3e5f !important;
   color: #94a3b8 !important;
 }
 
-.dark .tag-badge-item:hover {
+.dark .table-project-cell .tag-badge-item:hover {
   background: #283a5c !important;
   color: #cbd5e1 !important;
+}
+
+/* Modal Selected Badges (Team Members & Tags): Vibrant Blue Pills with Crisp White Text & Icons */
+.modal .tag-badges-wrapper,
+.custom-dropdown-container .tag-badges-wrapper {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  margin-top: 8px !important;
+  margin-bottom: 4px !important;
+}
+
+.modal .tag-badge-item,
+.custom-dropdown-container .tag-badge-item {
+  background: var(--blue, #3569df) !important;
+  border: 1px solid var(--blue, #3569df) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 4px 10px !important;
+  border-radius: 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  box-shadow: 0 2px 6px rgba(53, 105, 223, 0.22) !important;
+  line-height: 1.2 !important;
+  letter-spacing: normal !important;
+}
+
+.modal .tag-badge-item button,
+.custom-dropdown-container .tag-badge-item button {
+  border: 0 !important;
+  background: transparent !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  padding: 0 !important;
+  margin-left: 2px !important;
+  cursor: pointer !important;
+  opacity: 0.85 !important;
+  transition: opacity 0.15s ease !important;
+}
+
+.modal .tag-badge-item button:hover,
+.custom-dropdown-container .tag-badge-item button:hover {
+  opacity: 1 !important;
+}
+
+.modal .tag-badge-item .avatar-badge.micro,
+.custom-dropdown-container .tag-badge-item .avatar-badge.micro {
+  width: 17px !important;
+  height: 17px !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  background: rgba(255, 255, 255, 0.28) !important;
+  color: #ffffff !important;
+  border-radius: 50% !important;
+  display: inline-grid !important;
+  place-content: center !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  border: 0 !important;
 }
 
 /* ==========================================================================
@@ -3463,6 +3526,18 @@ input[type="date"], input[type="time"] {
 .button:hover {
   background: #f8fafc;
   border-color: #cbd5e1;
+}
+
+.button.danger-btn {
+  background: #ef4444 !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+.button.danger-btn:hover {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
+  transform: translateY(-1px);
 }
 
 .dark .month-select {
@@ -3837,27 +3912,34 @@ input[type="date"], input[type="time"] {
 
 .office-sync-pill {
   font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .office-sync-pill.synced {
-  background: #e0f2fe;
-  color: #0284c7;
-  border: 1px solid #bae6fd;
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
 }
 
 .office-sync-pill.pending {
-  background: #fef3c7;
-  color: #d97706;
-  border: 1px solid #fde68a;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.office-sync-pill.pending:hover {
+  background: #e2e8f0;
+  color: #334155;
+  border-color: #cbd5e1;
 }
 
 .spin-icon {
@@ -3887,14 +3969,19 @@ input[type="date"], input[type="time"] {
 }
 
 .dark .office-sync-pill.synced {
-  background: #0c4a6e;
-  color: #7dd3fc;
-  border-color: #0284c7;
+  background: rgba(22, 163, 74, 0.15);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.3);
 }
 
 .dark .office-sync-pill.pending {
-  background: #78350f;
-  color: #fde68a;
-  border-color: #d97706;
+  background: #1e293b;
+  color: #94a3b8;
+  border-color: #334155;
+}
+
+.dark .office-sync-pill.pending:hover {
+  background: #334155;
+  color: #f1f5f9;
 }
 
